@@ -271,6 +271,61 @@ router.post('/update-recently-cooked', async (req, res) => {
     }
 });
 
+// POST /recipes/save-from-chat
+router.post('/save-from-chat', async (req, res) => {
+    const { user_id, message_id, recipe } = req.body;
+    console.log('Received save-from-chat:', { user_id, message_id, recipe });
+    
+    if (!user_id || !message_id || !recipe) {
+        console.log('Missing required fields');
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    try {
+        // First, save the recipe to the recipes table
+        const { data: savedRecipe, error: recipeError } = await supabase
+            .from('recipes')
+            .insert([{
+                user_id,
+                title: recipe.title,
+                time: recipe.time,
+                tags: recipe.tags,
+                ingredients: recipe.ingredients,
+                steps: recipe.steps
+            }])
+            .select()
+            .single();
+
+        if (recipeError) {
+            console.log('Error saving recipe:', recipeError);
+            return res.status(500).json({ error: recipeError.message });
+        }
+
+        console.log('Recipe saved with ID:', savedRecipe.id);
+
+        // Then, update the message with the saved recipe ID
+        const { error: messageError } = await supabase
+            .from('messages')
+            .update({ saved_recipe_id: savedRecipe.id })
+            .eq('id', message_id);
+
+        if (messageError) {
+            console.log('Error updating message:', messageError);
+            return res.status(500).json({ error: messageError.message });
+        }
+
+        console.log('Successfully saved recipe and updated message');
+        res.json({ 
+            success: true, 
+            recipe_id: savedRecipe.id,
+            message: 'Recipe saved successfully'
+        });
+    } catch (err) {
+        console.log('Unexpected error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /recipes/save-message-recipe
 router.post('/save-message-recipe', async (req, res) => {
     const { message_id, saved_recipe_id } = req.body;

@@ -30,10 +30,14 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const params = useLocalSearchParams();
   const isAIRecipe = params.isAI === '1';
   const fromRecentlyCooked = params.fromRecentlyCooked === '1';
+  const messageId = params.message_id;
+  const savedRecipeId = params.saved_recipe_id;
   const [loading, setLoading] = useState(!isAIRecipe);
   const [recipe, setRecipe] = useState<any>(null);
   const [favorited, setFavorited] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Cooking state
   const [cooking, setCooking] = useState(false);
@@ -55,6 +59,9 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
       if (data?.user) setUserId(data.user.id);
     });
   }, []);
+
+  // Check if recipe is from chat and needs saving
+  const showSaveCTA = isAIRecipe && messageId && !savedRecipeId && !isSaved;
 
   // Load recipe data
   useEffect(() => {
@@ -102,7 +109,44 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     }
   }, [params.id, userId]);
 
-
+  // Save recipe function
+  const handleSaveRecipe = async () => {
+    if (!userId || !recipe || !messageId) return;
+    
+    setSaving(true);
+    try {
+      const response = await fetch('https://familycooksclean.onrender.com/recipes/save-from-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          message_id: messageId,
+          recipe: {
+            title: recipe.title,
+            time: recipe.time,
+            tags: recipe.tags,
+            ingredients: recipe.ingredients,
+            steps: recipe.steps,
+          }
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setIsSaved(true);
+        // Update the recipe with the saved ID
+        setRecipe((prev: any) => ({ ...prev, id: result.recipe_id }));
+        alert('Recipe saved successfully!');
+      } else {
+        throw new Error('Failed to save recipe');
+      }
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      alert('Failed to save recipe. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Initialize checked/completed state
   useEffect(() => {
@@ -342,6 +386,36 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
           </ScrollView>
         </View>
       </View>
+
+      {/* Save Recipe CTA - Only show for AI recipes from chat that aren't saved */}
+      {showSaveCTA && (
+        <View style={styles.saveCTAContainer}>
+          <View style={styles.saveCTACard}>
+            <View style={styles.saveCTAHeader}>
+              <Ionicons name="bookmark-outline" size={24} color="#8B5CF6" />
+              <CustomText style={styles.saveCTATitle}>Save This Recipe</CustomText>
+            </View>
+            <CustomText style={styles.saveCTASubtitle}>
+              Save this recipe to your collection so you can find it later
+            </CustomText>
+            <TouchableOpacity 
+              style={[styles.saveCTAButton, saving && styles.saveCTAButtonDisabled]} 
+              onPress={handleSaveRecipe}
+              disabled={saving}
+              activeOpacity={0.92}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="bookmark" size={20} color="#fff" style={{ marginRight: 8 }} />
+                  <CustomText style={styles.saveCTAButtonText}>Save Recipe</CustomText>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Cooking Progress Bar */}
       {cooking && (
@@ -789,5 +863,60 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  // Save CTA Styles
+  saveCTAContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  saveCTACard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  saveCTAHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  saveCTATitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#222',
+    marginLeft: 12,
+  },
+  saveCTASubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  saveCTAButton: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveCTAButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    shadowOpacity: 0.1,
+  },
+  saveCTAButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 }); 
