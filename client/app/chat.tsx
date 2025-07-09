@@ -409,7 +409,7 @@ export default function ChatScreen() {
                 <ScrollView 
                     ref={scrollViewRef}
                     style={styles.messagesContainer} 
-                    contentContainerStyle={{ paddingBottom: 80, paddingHorizontal: 0 }}
+                    contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 0 }}
                     showsVerticalScrollIndicator={false}
                     onScroll={handleScroll}
                     scrollEventThrottle={16}
@@ -482,7 +482,7 @@ export default function ChatScreen() {
                                     {!isGrouped && (
                                         <Image source={require('../assets/images/ai-avatar.png')} style={styles.messageAvatarModern} />
                                     )}
-                                    <View style={[styles.aiBubbleModern, !isGrouped && styles.aiBubbleTail]}> 
+                                    <View style={[styles.aiBubbleModern, !isGrouped && styles.aiBubbleTail, { maxWidth: SCREEN_WIDTH * 0.75 }]}> 
                                         <CustomText style={styles.aiTextModern}>{msg.content}</CustomText>
                                         <CustomText style={styles.timestampModern}>{timestamp}</CustomText>
                                     </View>
@@ -492,7 +492,7 @@ export default function ChatScreen() {
                         // User message
                         return (
                             <View key={idx} style={[styles.messageRow, styles.userRow, !isGrouped && { marginTop: 18 }]}> 
-                                <View style={[styles.userBubbleModern, !isGrouped && styles.userBubbleTail]}>
+                                <View style={[styles.userBubbleModern, !isGrouped && styles.userBubbleTail, { maxWidth: SCREEN_WIDTH * 0.75 }]}>
                                     <CustomText style={styles.userTextModern}>{msg.content}</CustomText>
                                     <CustomText style={styles.timestampModern}>{timestamp}</CustomText>
                                 </View>
@@ -511,38 +511,31 @@ export default function ChatScreen() {
                     </TouchableOpacity>
                 )}
             </View>
-            {/* Floating Input Bar with icons */}
-            <Animated.View style={[styles.floatingInputBarModern, inputFocused && styles.floatingInputBarFocusedModern]}>
-                <View style={styles.inputContainerModern}>
-                    <TouchableOpacity style={styles.inputIconBtn}>
-                        <Ionicons name="add" size={24} color="#B0B0B0" />
-                    </TouchableOpacity>
-                    <TextInput
-                        style={styles.textInputModern}
-                        placeholder="Type Message"
-                        placeholderTextColor="#B0B0B0"
-                        value={message}
-                        onChangeText={setMessage}
-                        multiline
-                        maxLength={500}
-                        onFocus={() => setInputFocused(true)}
-                        onBlur={() => setInputFocused(false)}
-                    />
-                    <TouchableOpacity style={styles.inputIconBtn}>
-                        <Ionicons name="happy-outline" size={24} color="#B0B0B0" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.inputIconBtn}>
-                        <Ionicons name="mic-outline" size={24} color="#B0B0B0" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.sendButtonModern, (!message.trim() || sending) && styles.sendButtonDisabledModern]}
-                        onPress={sendMessage}
-                        disabled={!message.trim() || sending}
-                    >
-                        <Ionicons name="send" size={20} color={message.trim() ? "#fff" : "#DDD"} />
-                    </TouchableOpacity>
+            {/* Floating Input Bar - Simplified to match empty state */}
+            <SafeAreaView edges={['bottom']} style={styles.safeAreaInput}>
+                <View style={styles.inputContainer}>
+                    <View style={styles.inputBoxFocused}>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Type Message"
+                            placeholderTextColor="#B0B0B0"
+                            value={message}
+                            onChangeText={setMessage}
+                            multiline
+                            maxLength={500}
+                            onFocus={() => setInputFocused(true)}
+                            onBlur={() => setInputFocused(false)}
+                        />
+                        <TouchableOpacity
+                            style={[styles.sendButton, (!message.trim() || sending) && styles.sendButtonDisabled]}
+                            onPress={sendMessage}
+                            disabled={!message.trim() || sending}
+                        >
+                            <Ionicons name="send" size={18} color={message.trim() ? "#fff" : "#DDD"} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </Animated.View>
+            </SafeAreaView>
         </SafeAreaView>
     );
 }
@@ -582,10 +575,10 @@ const styles = StyleSheet.create({
     },
     messagesContainer: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
+        backgroundColor: '#F3F0FF',
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
-        paddingHorizontal: 12,
+        paddingHorizontal: 16,
         marginTop: 10,
     },
     messageRow: {
@@ -718,12 +711,12 @@ const styles = StyleSheet.create({
         right: 18,
     },
     safeAreaInput: {
-        backgroundColor: 'transparent',
+        backgroundColor: '#F3F0FF',
     },
     inputContainer: {
         backgroundColor: 'transparent',
         paddingHorizontal: 0,
-        paddingBottom: 16,
+        paddingBottom: 20,
         paddingTop: 0,
         borderTopWidth: 0,
         shadowColor: 'transparent',
@@ -930,7 +923,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 22,
         padding: 16,
-        marginHorizontal: 4,
+        marginHorizontal: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.07,
@@ -938,12 +931,13 @@ const styles = StyleSheet.create({
         elevation: 3,
         marginBottom: 2,
         marginTop: 2,
+        flexShrink: 1,
     },
     userBubbleModern: {
         backgroundColor: '#B6E2D3',
         borderRadius: 22,
         padding: 16,
-        marginHorizontal: 4,
+        marginHorizontal: 8,
         shadowColor: '#B6E2D3',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.07,
@@ -951,6 +945,7 @@ const styles = StyleSheet.create({
         elevation: 3,
         marginBottom: 2,
         marginTop: 2,
+        flexShrink: 1,
     },
     aiTextModern: {
         color: '#222',
@@ -958,6 +953,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         lineHeight: 22,
         letterSpacing: -0.1,
+        flexShrink: 1,
     },
     userTextModern: {
         color: '#222',
@@ -965,6 +961,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         lineHeight: 22,
         letterSpacing: -0.1,
+        flexShrink: 1,
     },
     timestamp: {
         fontSize: 12,
@@ -1101,7 +1098,7 @@ const styles = StyleSheet.create({
     },
     chatAreaBg: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
+        backgroundColor: '#F3F0FF',
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         marginTop: HEADER_HEIGHT, // Push chat area below header
