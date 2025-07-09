@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
 import { profileService } from '../lib/profileService';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DietaryPreferencesScreen() {
     const router = useRouter();
@@ -39,101 +40,218 @@ export default function DietaryPreferencesScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
             <Stack.Screen options={{ headerShown: false }} />
+            
             {/* Header */}
-            <View style={styles.headerRow}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={26} color="#444" />
-                </TouchableOpacity>
+            <View style={styles.headerBg}>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+                        <Ionicons name="close" size={24} color="#6B7280" />
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }} />
+                </View>
                 <CustomText style={styles.headerText}>Dietary Preferences</CustomText>
+                <CustomText style={styles.subHeader}>Tell us about your food preferences and restrictions</CustomText>
             </View>
-            <CustomText style={styles.sectionLabel}>Dietary Preferences</CustomText>
-            <TextInput
-                style={styles.input}
-                placeholder="List allergies, preferences, and ingredients to avoid"
-                placeholderTextColor="#6C757D"
-                value={preferences}
-                onChangeText={setPreferences}
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-                editable={!loading && !saving}
-            />
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving || loading}>
-                <CustomText style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</CustomText>
-            </TouchableOpacity>
-        </View>
+
+            {/* Main Content */}
+            <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
+                    
+                    {/* Info Card */}
+                    <View style={styles.infoCard}>
+                        <View style={styles.infoIconBox}>
+                            <Ionicons name="restaurant-outline" size={24} color="#fff" />
+                        </View>
+                        <CustomText style={styles.infoTitle}>Personalize Your Experience</CustomText>
+                        <CustomText style={styles.infoSubtitle}>
+                            Share your dietary restrictions, allergies, and preferences to get better recipe recommendations
+                        </CustomText>
+                    </View>
+
+                    {/* Preferences Input Card */}
+                    <View style={styles.inputCard}>
+                        <CustomText style={styles.sectionLabel}>Your Dietary Preferences</CustomText>
+                        <CustomText style={styles.sectionSubtitle}>
+                            List allergies, preferences, and ingredients to avoid
+                        </CustomText>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="e.g., Gluten-free, dairy allergy, vegetarian, no nuts..."
+                            placeholderTextColor="#9CA3AF"
+                            value={preferences}
+                            onChangeText={setPreferences}
+                            multiline
+                            numberOfLines={8}
+                            textAlignVertical="top"
+                            editable={!loading && !saving}
+                        />
+                    </View>
+
+                    {/* Save Button */}
+                    <View style={styles.saveContainer}>
+                        <TouchableOpacity 
+                            style={[styles.saveButton, (saving || loading) && styles.saveButtonDisabled]} 
+                            onPress={handleSave} 
+                            disabled={saving || loading}
+                            activeOpacity={0.92}
+                        >
+                            {saving ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <>
+                                    <Ionicons name="checkmark" size={20} color="#fff" style={{ marginRight: 8 }} />
+                                    <CustomText style={styles.saveButtonText}>Save Preferences</CustomText>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F1F6F9',
-        paddingTop: 80,
-        paddingHorizontal: 0,
+    headerBg: {
+        backgroundColor: '#F3F0FF',
+        paddingTop: Platform.OS === 'ios' ? 48 : 32,
+        paddingBottom: 24,
+        paddingHorizontal: 24,
+        borderBottomLeftRadius: 32,
+        borderBottomRightRadius: 32,
     },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 18,
+        marginBottom: 8,
     },
-    backButton: {
-        marginRight: 8,
-        padding: 4,
-    },
-    headerText: {
-        fontSize: 22,
-        fontWeight: '700',
-        flex: 1,
-        textAlign: 'center',
-        marginRight: 32,
-        color: '#444',
-    },
-    sectionLabel: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#222',
-        marginLeft: 32,
-        marginTop: 18,
-        marginBottom: 6,
-    },
-    input: {
+    closeButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: '#fff',
-        borderRadius: 20,
-        paddingHorizontal: 18,
-        paddingVertical: 18,
-        fontSize: 16,
-        color: '#222',
-        marginHorizontal: 24,
-        marginBottom: 24,
-        minHeight: 120,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    saveButton: {
-        backgroundColor: '#E2B36A',
-        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        height: 48,
-        marginHorizontal: 24,
-        marginTop: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    headerText: {
+        fontSize: 26,
+        fontWeight: '800',
+        color: '#222',
+        marginTop: 2,
+        marginLeft: 2,
+        letterSpacing: -0.5,
+    },
+    subHeader: {
+        fontSize: 16,
+        color: '#6B7280',
+        fontWeight: '500',
+        marginTop: 2,
+        marginBottom: 8,
+    },
+    infoCard: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        marginHorizontal: 18,
         marginBottom: 24,
-        shadowColor: '#E2B36A',
+        padding: 24,
+        alignItems: 'center',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.10,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    infoIconBox: {
+        width: 56,
+        height: 56,
+        borderRadius: 18,
+        backgroundColor: '#B6E2D3',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    infoTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#222',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    infoSubtitle: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+        fontWeight: '500',
+        lineHeight: 20,
+    },
+    inputCard: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        marginHorizontal: 18,
+        marginBottom: 24,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    sectionLabel: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#222',
+        marginBottom: 6,
+    },
+    sectionSubtitle: {
+        fontSize: 14,
+        color: '#6B7280',
+        fontWeight: '500',
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+    input: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        paddingHorizontal: 18,
+        paddingVertical: 16,
+        fontSize: 16,
+        color: '#222',
+        fontWeight: '500',
+        minHeight: 140,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        textAlignVertical: 'top',
+    },
+    saveContainer: {
+        paddingHorizontal: 18,
+    },
+    saveButton: {
+        backgroundColor: '#B6E2D3',
+        borderRadius: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 52,
+        shadowColor: '#B6E2D3',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 4,
     },
+    saveButtonDisabled: {
+        backgroundColor: '#9CA3AF',
+        shadowOpacity: 0.1,
+    },
     saveButtonText: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '700',
     },
 }); 
