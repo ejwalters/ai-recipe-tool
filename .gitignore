@@ -1,0 +1,21 @@
+# Global ignores
+node_modules/
+.env
+.DS_Store
+
+# Client-specific
+client/node_modules/
+client/.expo/
+client/dist/
+client/build/
+client/.env
+
+# Server-specific
+server/node_modules/
+server/.env
+
+# VSCode
+.vscode/
+
+# System
+*.log
