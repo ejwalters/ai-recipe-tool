@@ -268,23 +268,73 @@ export default function ChatScreen() {
                     if (maybeJson && maybeJson.is_recipe) {
                         return [
                             ...withoutLoading,
-                            { role: 'assistant', content: '[RECIPE_CARD]', recipe: maybeJson }
+                            { 
+                                role: 'assistant', 
+                                content: '[RECIPE_CARD]', 
+                                recipe: maybeJson,
+                                id: data.message_id // Include the message ID from server response
+                            }
                         ];
                     } else if (maybeJson && maybeJson.is_recipe === false) {
                         // Prefer 'text', fallback to 'message'
                         const text = maybeJson.text || maybeJson.message;
                         return [
                             ...withoutLoading,
-                            { role: 'assistant', content: text || data.ai_response }
+                            { 
+                                role: 'assistant', 
+                                content: text || data.ai_response,
+                                id: data.message_id // Include the message ID from server response
+                            }
                         ];
                     } else {
                         return [
                             ...withoutLoading,
-                            { role: 'assistant', content: data.ai_response }
+                            { 
+                                role: 'assistant', 
+                                content: data.ai_response,
+                                id: data.message_id // Include the message ID from server response
+                            }
                         ];
                     }
                 });
                 console.log('AI raw response:', data.ai_response);
+                console.log('Server response data:', data);
+                
+                // Fetch the updated messages to get the message ID
+                if (data.chat_id) {
+                    fetch(`https://familycooksclean.onrender.com/ai/messages?chat_id=${data.chat_id}`)
+                        .then(res => res.json())
+                        .then(messages => {
+                            console.log('Updated messages after AI response:', messages);
+                            // Update the messages with the IDs from the database
+                            const transformed = messages.flatMap((msg: any) => {
+                                if (msg.role === 'assistant') {
+                                    const maybeJson = extractJsonFromString(msg.content);
+                                    if (maybeJson && maybeJson.is_recipe) {
+                                        return [{ 
+                                            role: 'assistant', 
+                                            content: '[RECIPE_CARD]', 
+                                            recipe: maybeJson,
+                                            id: msg.id,
+                                            saved_recipe_id: msg.saved_recipe_id
+                                        }];
+                                    } else if (maybeJson && maybeJson.is_recipe === false) {
+                                        const text = maybeJson.text || maybeJson.message;
+                                        if (text) {
+                                            return [{ 
+                                                role: 'assistant', 
+                                                content: text,
+                                                id: msg.id
+                                            }];
+                                        }
+                                    }
+                                }
+                                return [msg];
+                            });
+                            setAllMessages(transformed);
+                        })
+                        .catch(err => console.error('Error fetching updated messages:', err));
+                }
             } else {
                 // Remove loading message and show error
                 setAllMessages(prev => {
@@ -430,8 +480,15 @@ export default function ChatScreen() {
                                     <TouchableOpacity
                                         style={[styles.recipeCardModern, { backgroundColor: cardColor, maxWidth: SCREEN_WIDTH * 0.92, alignSelf: 'center' }]} activeOpacity={0.88}
                                         onPress={() => {
+                                            console.log('=== CHAT NAVIGATION DEBUG ===');
+                                            console.log('msg.saved_recipe_id:', msg.saved_recipe_id);
+                                            console.log('msg.id:', msg.id);
+                                            console.log('msg.recipe:', msg.recipe);
+                                            
                                             if (msg.saved_recipe_id) {
-                                                router.push({ pathname: '/recipe-detail', params: { id: msg.saved_recipe_id, message_id: msg.id, saved_recipe_id: msg.saved_recipe_id } });
+                                                const savedParams = { id: msg.saved_recipe_id, message_id: msg.id, saved_recipe_id: msg.saved_recipe_id, isAI: '1' };
+                                                console.log('Navigating to saved recipe with params:', savedParams);
+                                                router.push({ pathname: '/recipe-detail', params: savedParams });
                                             } else {
                                                 const params = {
                                                     ...msg.recipe,
@@ -442,6 +499,7 @@ export default function ChatScreen() {
                                                     steps: JSON.stringify(msg.recipe.steps),
                                                     message_id: msg.id,
                                                 };
+                                                console.log('Navigating to unsaved AI recipe with params:', params);
                                                 router.push({ pathname: '/recipe-detail', params });
                                             }
                                         }}

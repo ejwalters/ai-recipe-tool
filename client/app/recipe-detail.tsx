@@ -28,16 +28,27 @@ interface RecipeDetailV2Props {
 export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDetailV2Props) {
   const router = propRouter || useRouter();
   const params = useLocalSearchParams();
+  
+  // Debug logging for parameters
+  console.log('=== RECIPE DETAIL PARAMS DEBUG ===');
+  console.log('All params:', params);
+  console.log('params.id:', params.id);
+  console.log('params.saved_recipe_id:', params.saved_recipe_id);
+  console.log('params.message_id:', params.message_id);
+  console.log('params.isAI:', params.isAI);
+  console.log('params.fromRecentlyCooked:', params.fromRecentlyCooked);
+  console.log('Component render timestamp:', new Date().toISOString());
+  
   const isAIRecipe = params.isAI === '1';
   const fromRecentlyCooked = params.fromRecentlyCooked === '1';
+  const isSavedFromMessage = params.saved_recipe_id && params.message_id;
   const messageId = params.message_id;
-  const savedRecipeId = params.saved_recipe_id;
   const [loading, setLoading] = useState(!isAIRecipe);
   const [recipe, setRecipe] = useState<any>(null);
   const [favorited, setFavorited] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Cooking state
   const [cooking, setCooking] = useState(false);
@@ -60,8 +71,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     });
   }, []);
 
-  // Check if recipe is from chat and needs saving
-  const showSaveCTA = isAIRecipe && messageId && !savedRecipeId && !isSaved;
+
 
   // Load recipe data
   useEffect(() => {
@@ -109,44 +119,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     }
   }, [params.id, userId]);
 
-  // Save recipe function
-  const handleSaveRecipe = async () => {
-    if (!userId || !recipe || !messageId) return;
-    
-    setSaving(true);
-    try {
-      const response = await fetch('https://familycooksclean.onrender.com/recipes/save-from-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          message_id: messageId,
-          recipe: {
-            title: recipe.title,
-            time: recipe.time,
-            tags: recipe.tags,
-            ingredients: recipe.ingredients,
-            steps: recipe.steps,
-          }
-        }),
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        setIsSaved(true);
-        // Update the recipe with the saved ID
-        setRecipe((prev: any) => ({ ...prev, id: result.recipe_id }));
-        alert('Recipe saved successfully!');
-      } else {
-        throw new Error('Failed to save recipe');
-      }
-    } catch (error) {
-      console.error('Error saving recipe:', error);
-      alert('Failed to save recipe. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
+
 
   // Initialize checked/completed state
   useEffect(() => {
@@ -254,6 +227,57 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     }
   };
 
+  const handleSaveRecipe = async () => {
+    if (!userId || !recipe || !(messageId || params.message_id)) return;
+    
+    setSaving(true);
+    try {
+      // First, save the recipe to get a recipe ID
+      const saveRecipeRes = await fetch('https://familycooksclean.onrender.com/recipes/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          title: recipe.title,
+          time: recipe.time,
+          tags: recipe.tags,
+          ingredients: recipe.ingredients,
+          steps: recipe.steps,
+        }),
+      });
+      
+      if (!saveRecipeRes.ok) throw new Error('Failed to save recipe');
+      
+      const savedRecipe = await saveRecipeRes.json();
+      console.log('Recipe saved with ID:', savedRecipe.id);
+      
+      // Then, update the message with the saved recipe ID
+      const updateMessageRes = await fetch('https://familycooksclean.onrender.com/recipes/save-message-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: messageId || params.message_id,
+          saved_recipe_id: savedRecipe.id,
+        }),
+      });
+      
+      if (!updateMessageRes.ok) throw new Error('Failed to update message');
+      
+      console.log('Message updated successfully');
+      alert('Recipe saved successfully!');
+      
+      // Update the recipe object with the new ID
+      setRecipe((prev: any) => ({ ...prev, id: savedRecipe.id }));
+      setSaved(true);
+      
+    } catch (err) {
+      console.error('Error saving recipe:', err);
+      alert('Failed to save recipe. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleStartCooking = async () => {
     if (!cooking) {
       if (!userId || !recipe?.id) return;
@@ -320,6 +344,9 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const ingredients = ensureArray(recipe?.ingredients, []);
   const steps = ensureArray(recipe?.steps, []);
 
+  // Robust check for saved_recipe_id
+  const hasSavedRecipeId = params.saved_recipe_id !== undefined && params.saved_recipe_id !== null && params.saved_recipe_id !== '';
+
   if (loading || !recipe) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -346,7 +373,6 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
-          
           <TouchableOpacity 
             style={styles.favoriteButton} 
             onPress={handleToggleFavorite}
@@ -359,6 +385,52 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             )}
           </TouchableOpacity>
         </View>
+        {/* Floating Save Recipe Button - bottom right of header */}
+        {(() => {
+          const hasMessageId = Boolean(messageId || params.message_id);
+          const shouldShowSaveButton = Boolean(isAIRecipe && recipe && hasMessageId);
+          console.log('Save/Saved Button Debug:', {
+            isAIRecipe,
+            messageId,
+            params_message_id: params.message_id,
+            hasMessageId,
+            hasSavedRecipeId,
+            saved,
+            recipe_loaded: !!recipe,
+            shouldShowSaveButton,
+            isSaved: hasSavedRecipeId || saved,
+          });
+          return shouldShowSaveButton;
+        })() && (
+          <View style={styles.saveRecipeFABWrapper} pointerEvents="box-none">
+            {(hasSavedRecipeId || saved) ? (
+              <TouchableOpacity
+                style={[styles.saveRecipeFAB, styles.saveRecipeFABDisabled]}
+                disabled={true}
+                activeOpacity={1}
+              >
+                <Ionicons name="bookmark" size={18} color="#FFD580" style={{ marginRight: 6 }} />
+                <CustomText style={styles.saveRecipeFABText}>Saved</CustomText>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={saving ? [styles.saveRecipeFAB, styles.saveRecipeFABDisabled] : styles.saveRecipeFAB}
+                onPress={handleSaveRecipe}
+                disabled={saving}
+                activeOpacity={0.92}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#222" />
+                ) : (
+                  <>
+                    <Ionicons name="bookmark-outline" size={18} color="#FFD580" style={{ marginRight: 6 }} />
+                    <CustomText style={styles.saveRecipeFABText}>Save Recipe</CustomText>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         
         <View style={styles.recipeInfo}>
           <CustomText style={styles.recipeTitle}>{recipe.title}</CustomText>
@@ -386,36 +458,6 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
           </ScrollView>
         </View>
       </View>
-
-      {/* Save Recipe CTA - Only show for AI recipes from chat that aren't saved */}
-      {showSaveCTA && (
-        <View style={styles.saveCTAContainer}>
-          <View style={styles.saveCTACard}>
-            <View style={styles.saveCTAHeader}>
-              <Ionicons name="bookmark-outline" size={24} color="#8B5CF6" />
-              <CustomText style={styles.saveCTATitle}>Save This Recipe</CustomText>
-            </View>
-            <CustomText style={styles.saveCTASubtitle}>
-              Save this recipe to your collection so you can find it later
-            </CustomText>
-            <TouchableOpacity 
-              style={[styles.saveCTAButton, saving && styles.saveCTAButtonDisabled]} 
-              onPress={handleSaveRecipe}
-              disabled={saving}
-              activeOpacity={0.92}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="bookmark" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <CustomText style={styles.saveCTAButtonText}>Save Recipe</CustomText>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       {/* Cooking Progress Bar */}
       {cooking && (
@@ -864,59 +906,127 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 40,
   },
-  // Save CTA Styles
-  saveCTAContainer: {
+  saveRecipeContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingBottom: 16,
   },
-  saveCTACard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  saveCTAHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  saveCTATitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    marginLeft: 12,
-  },
-  saveCTASubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  saveCTAButton: {
-    backgroundColor: '#8B5CF6',
+  saveRecipeButton: {
+    backgroundColor: '#B6E2D3',
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 52,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    shadowColor: '#B6E2D3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 8,
   },
-  saveCTAButtonDisabled: {
+  saveRecipeButtonDisabled: {
     backgroundColor: '#9CA3AF',
     shadowOpacity: 0.1,
   },
-  saveCTAButtonText: {
+  saveRecipeButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  saveRecipeButtonCard: {
+    backgroundColor: '#FFF3C4',
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    shadowColor: '#FFD580',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1.5,
+    borderColor: '#FFE29A',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  saveRecipeButtonCardDisabled: {
+    opacity: 0.6,
+  },
+  saveRecipeButtonCardText: {
+    color: '#222',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  saveRecipePillContainer: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 18,
+  },
+  saveRecipePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#FFD580',
+    backgroundColor: 'rgba(255,243,196,0.15)',
+    paddingVertical: 8,
+    paddingHorizontal: 22,
+    minHeight: 36,
+    minWidth: 120,
+    shadowColor: 'transparent',
+  },
+  saveRecipePillDisabled: {
+    opacity: 0.5,
+  },
+  saveRecipePillText: {
+    color: '#FFD580',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  saveRecipeIconButton: {
+    marginHorizontal: 8,
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,243,196,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveRecipeFABWrapper: {
+    position: 'absolute',
+    right: 24,
+    bottom: 8,
+    zIndex: 10,
+    shadowColor: '#FFD580',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  saveRecipeFAB: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FFD580',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    minHeight: 32,
+    minWidth: 32,
+    shadowColor: 'transparent',
+  },
+  saveRecipeFABDisabled: {
+    opacity: 0.6,
+  },
+  saveRecipeFABText: {
+    color: '#FFD580',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
 }); 
