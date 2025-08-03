@@ -130,9 +130,13 @@ For non-recipe responses, always return a JSON object with "is_recipe": false an
             // Not valid JSON, leave as is
         }
 
-        await supabase
+        const { data: insertedMessage, error: insertError } = await supabase
             .from('messages')
-            .insert([{ chat_id: chatId, user_id, role: 'assistant', content: normalizedContent }]);
+            .insert([{ chat_id: chatId, user_id, role: 'assistant', content: normalizedContent }])
+            .select()
+            .single();
+
+        if (insertError) return res.status(500).json({ error: insertError.message });
 
         // 6. Fetch all messages for this chat
         const { data: allMessages, error: fetchAllError } = await supabase
@@ -151,7 +155,7 @@ For non-recipe responses, always return a JSON object with "is_recipe": false an
                 .update({ summary })
                 .eq('id', chatId);
         }
-        res.json({ chat_id: chatId, ai_response: aiResponse });
+        res.json({ chat_id: chatId, ai_response: aiResponse, message_id: insertedMessage.id });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
