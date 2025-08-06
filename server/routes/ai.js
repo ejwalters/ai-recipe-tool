@@ -390,6 +390,150 @@ Be as accurate as possible with the extraction. For ingredients and steps, split
     }
 });
 
+// POST /ai/modify-recipe
+router.post('/modify-recipe', async (req, res) => {
+    const { recipe, userPrompt, user_id } = req.body;
+
+    if (!recipe || !userPrompt || !user_id) {
+        return res.status(400).json({ error: 'Missing recipe, userPrompt, or user_id' });
+    }
+
+    try {
+        // Fetch user's dietary preferences
+        let dietaryPreferences = '';
+        try {
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('dietary_preferences')
+                .eq('id', user_id)
+                .single();
+            if (!profileError && profile && profile.dietary_preferences) {
+                dietaryPreferences = profile.dietary_preferences;
+            }
+        } catch (e) {
+            // Ignore, fallback to empty
+        }
+
+        const systemPrompt = {
+            role: 'system',
+            content: `
+You are an AI chef assistant that modifies recipes based on user requests. The user has the following dietary preferences and restrictions: ${dietaryPreferences || 'None provided'}.
+
+You will receive a recipe and a user prompt requesting modifications. Your job is to:
+1. Understand the user's request
+2. Modify the recipe accordingly while maintaining its core essence
+3. Ensure the modifications respect any dietary restrictions
+4. Return the modified recipe in the same JSON format
+
+IMPORTANT RULES:
+- Always maintain the recipe's core identity and flavor profile
+- If the user wants to make it healthier, suggest ingredient substitutions or cooking method changes
+- If the user wants to change serving size, adjust all ingredient quantities proportionally
+- If the user wants to change cooking time, adjust steps accordingly
+- If the user wants to add/remove ingredients, ensure the recipe still works
+- For dietary restrictions, suggest appropriate substitutions
+- Always return a complete, functional recipe
+
+Return ONLY a JSON object with these fields:
+- title (string)
+- time (string, e.g. "30 min")
+- servings (string, e.g. "4 servings")
+- ingredients (array of strings)
+- steps (array of strings)
+- tags (array of strings)
+- modifications (string - brief description of what was changed)
+
+IMPORTANT: For ingredients and steps, return arrays of strings. Each string should be a single ingredient or step.
+`
+        };
+
+        const userMessage = {
+            role: 'user',
+            content: `
+Original Recipe:
+Title: ${recipe.title}
+Time: ${recipe.time}
+Servings: ${recipe.servings}
+Ingredients: ${JSON.stringify(recipe.ingredients)}
+Steps: ${JSON.stringify(recipe.steps)}
+Tags: ${JSON.stringify(recipe.tags)}
+
+User Request: ${userPrompt}
+
+Please modify this recipe according to the user's request and return the modified version.
+`
+        };
+
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4',
+            messages: [systemPrompt, userMessage],
+            max_tokens: 1500,
+            temperature: 0.7,
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        console.log('Raw AI Modification Response:', aiResponse);
+
+        // Parse the AI response
+        let modifiedRecipe;
+        try {
+            let jsonString = aiResponse.trim();
+            
+            // Remove markdown code blocks if present
+            if (jsonString.startsWith('```json')) {
+                jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (jsonString.startsWith('```')) {
+                jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+            }
+            
+            modifiedRecipe = JSON.parse(jsonString);
+            console.log('Parsed Modified Recipe:', modifiedRecipe);
+            
+        } catch (parseError) {
+            console.error('Error parsing AI modification response:', parseError);
+            console.error('Raw response that failed to parse:', aiResponse);
+            
+            // Try to extract JSON using regex as fallback
+            const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    modifiedRecipe = JSON.parse(jsonMatch[0]);
+                    console.log('Extracted JSON using regex:', modifiedRecipe);
+                } catch (regexParseError) {
+                    console.error('Regex extraction also failed:', regexParseError);
+                    return res.status(500).json({ 
+                        error: 'Failed to parse modified recipe from AI response',
+                        rawResponse: aiResponse.substring(0, 500)
+                    });
+                }
+            } else {
+                return res.status(500).json({ 
+                    error: 'No valid JSON found in AI response',
+                    rawResponse: aiResponse.substring(0, 500)
+                });
+            }
+        }
+
+        // Validate and clean the modified recipe
+        const cleanedRecipe = {
+            title: modifiedRecipe.title || recipe.title,
+            time: modifiedRecipe.time || recipe.time,
+            servings: modifiedRecipe.servings || recipe.servings,
+            ingredients: Array.isArray(modifiedRecipe.ingredients) ? modifiedRecipe.ingredients.filter(i => i.trim()) : recipe.ingredients,
+            steps: Array.isArray(modifiedRecipe.steps) ? modifiedRecipe.steps.filter(s => s.trim()) : recipe.steps,
+            tags: Array.isArray(modifiedRecipe.tags) ? modifiedRecipe.tags.filter(t => t.trim()) : recipe.tags,
+            modifications: modifiedRecipe.modifications || 'Recipe modified based on user request'
+        };
+
+        console.log('Final cleaned modified recipe:', cleanedRecipe);
+        res.json(cleanedRecipe);
+
+    } catch (error) {
+        console.error('Error modifying recipe:', error);
+        res.status(500).json({ error: 'Failed to modify recipe' });
+    }
+});
+
 async function generateChatSummary(messages) {
     const prompt = `
 Summarize the following conversation in a few keywords for a chat history list. Focus on the main topic, recipe, or user request. If the chat is mostly casual or contains no recipe, summarize the general theme.

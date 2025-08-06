@@ -10,7 +10,9 @@ import {
   Easing, 
   Dimensions,
   ActivityIndicator,
-  StatusBar
+  StatusBar,
+  TextInput,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -46,6 +48,14 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const [completedSteps, setCompletedSteps] = useState<boolean[]>([]);
   const [timerRunning, setTimerRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+
+  // AI Modification state
+  const [showModificationSection, setShowModificationSection] = useState(false);
+  const [modificationPrompt, setModificationPrompt] = useState('');
+  const [isModifying, setIsModifying] = useState(false);
+  const [modifiedRecipe, setModifiedRecipe] = useState<any>(null);
+  const [showModifiedRecipe, setShowModifiedRecipe] = useState(false);
+  const [savingModified, setSavingModified] = useState(false);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -455,6 +465,124 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     }
   };
 
+  // AI Modification Functions
+  const handleModifyRecipe = async () => {
+    if (!modificationPrompt.trim() || !userId) {
+      Alert.alert('Error', 'Please enter a modification request');
+      return;
+    }
+
+    setIsModifying(true);
+    try {
+      const response = await fetch('https://familycooksclean.onrender.com/ai/modify-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipe: {
+            title: recipe.title,
+            time: recipe.time,
+            servings: recipe.servings,
+            ingredients: ingredients,
+            steps: steps,
+            tags: tags
+          },
+          userPrompt: modificationPrompt,
+          user_id: userId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to modify recipe');
+      }
+
+      const modifiedData = await response.json();
+      setModifiedRecipe(modifiedData);
+      setShowModifiedRecipe(true);
+      setModificationPrompt('');
+      setShowModificationSection(false);
+
+    } catch (error: any) {
+      console.error('Error modifying recipe:', error);
+      Alert.alert(
+        'Modification Error',
+        error.message || 'Failed to modify recipe. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsModifying(false);
+    }
+  };
+
+  const handleSaveModifiedRecipe = async () => {
+    if (!modifiedRecipe || !userId) return;
+
+    setSavingModified(true);
+    try {
+      const response = await fetch('https://familycooksclean.onrender.com/recipes/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          title: modifiedRecipe.title,
+          time: modifiedRecipe.time,
+          servings: modifiedRecipe.servings,
+          ingredients: modifiedRecipe.ingredients,
+          steps: modifiedRecipe.steps,
+          tags: modifiedRecipe.tags
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save modified recipe');
+      }
+
+      const savedRecipe = await response.json();
+      Alert.alert(
+        'Success!',
+        'Modified recipe saved to your collection!',
+        [
+          {
+            text: 'View Recipe',
+            onPress: () => {
+              setShowModifiedRecipe(false);
+              setModifiedRecipe(null);
+              router.push({
+                pathname: '/recipe-detail',
+                params: { id: savedRecipe.id }
+              });
+            }
+          },
+          {
+            text: 'Stay Here',
+            onPress: () => {
+              setShowModifiedRecipe(false);
+              setModifiedRecipe(null);
+            }
+          }
+        ]
+      );
+
+    } catch (error: any) {
+      console.error('Error saving modified recipe:', error);
+      Alert.alert(
+        'Save Error',
+        error.message || 'Failed to save modified recipe. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setSavingModified(false);
+    }
+  };
+
+  const handleCancelModification = () => {
+    setShowModifiedRecipe(false);
+    setModifiedRecipe(null);
+    setModificationPrompt('');
+    setShowModificationSection(false);
+  };
+
   function ensureArray(val: any, fallback: string[]): string[] {
     if (Array.isArray(val)) return val;
     if (typeof val === 'string' && val) {
@@ -733,6 +861,144 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             ))}
           </View>
         </View>
+
+        {/* AI Recipe Modification Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="sparkles-outline" size={20} color="#2D3748" />
+            <CustomText style={styles.sectionTitle}>AI Recipe Modifier</CustomText>
+            <CustomText style={styles.sectionSubtitle}>
+              Get AI suggestions to modify this recipe
+            </CustomText>
+          </View>
+          
+          {!showModificationSection ? (
+            <TouchableOpacity
+              style={styles.modifyButton}
+              onPress={() => setShowModificationSection(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="sparkles" size={20} color="#667EEA" />
+              <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.modificationContainer}>
+              <TextInput
+                style={styles.modificationInput}
+                placeholder="Describe how you'd like to modify this recipe (e.g., 'Make it vegetarian', 'Double the servings', 'Make it spicier')"
+                placeholderTextColor="#A0AEC0"
+                value={modificationPrompt}
+                onChangeText={setModificationPrompt}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              
+              <View style={styles.modificationButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setShowModificationSection(false);
+                    setModificationPrompt('');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <CustomText style={styles.cancelButtonText}>Cancel</CustomText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.submitButton, !modificationPrompt.trim() && styles.submitButtonDisabled]}
+                  onPress={handleModifyRecipe}
+                  disabled={!modificationPrompt.trim() || isModifying}
+                  activeOpacity={0.8}
+                >
+                  {isModifying ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={16} color="#fff" />
+                      <CustomText style={styles.submitButtonText}>Modify</CustomText>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Modified Recipe Preview */}
+        {showModifiedRecipe && modifiedRecipe && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#48BB78" />
+              <CustomText style={styles.sectionTitle}>Modified Recipe</CustomText>
+              <CustomText style={styles.sectionSubtitle}>
+                {modifiedRecipe.modifications || 'Recipe modified based on your request'}
+              </CustomText>
+            </View>
+            
+            <View style={styles.modifiedRecipeContainer}>
+              <View style={styles.modifiedRecipeHeader}>
+                <CustomText style={styles.modifiedRecipeTitle}>{modifiedRecipe.title}</CustomText>
+                <View style={styles.modifiedRecipeMeta}>
+                  <View style={styles.modifiedMetaItem}>
+                    <Ionicons name="time-outline" size={14} color="#6B7280" />
+                    <CustomText style={styles.modifiedMetaText}>{modifiedRecipe.time}</CustomText>
+                  </View>
+                  <View style={styles.modifiedMetaItem}>
+                    <Ionicons name="restaurant-outline" size={14} color="#6B7280" />
+                    <CustomText style={styles.modifiedMetaText}>{modifiedRecipe.servings}</CustomText>
+                  </View>
+                </View>
+              </View>
+              
+              <View style={styles.modifiedRecipeContent}>
+                <View style={styles.modifiedSection}>
+                  <CustomText style={styles.modifiedSectionTitle}>Ingredients</CustomText>
+                  {modifiedRecipe.ingredients?.map((ing: string, idx: number) => (
+                    <CustomText key={idx} style={styles.modifiedIngredient}>• {ing}</CustomText>
+                  ))}
+                </View>
+                
+                <View style={styles.modifiedSection}>
+                  <CustomText style={styles.modifiedSectionTitle}>Instructions</CustomText>
+                  {modifiedRecipe.steps?.map((step: string, idx: number) => (
+                    <View key={idx} style={styles.modifiedStep}>
+                      <CustomText style={styles.modifiedStepNumber}>{idx + 1}.</CustomText>
+                      <CustomText style={styles.modifiedStepText}>{step}</CustomText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              
+              <View style={styles.modifiedRecipeActions}>
+                <TouchableOpacity
+                  style={styles.saveModifiedButton}
+                  onPress={handleSaveModifiedRecipe}
+                  disabled={savingModified}
+                  activeOpacity={0.8}
+                >
+                  {savingModified ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="save-outline" size={16} color="#fff" />
+                      <CustomText style={styles.saveModifiedButtonText}>Save Modified Recipe</CustomText>
+                    </>
+                  )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.cancelModifiedButton}
+                  onPress={handleCancelModification}
+                  activeOpacity={0.8}
+                >
+                  <CustomText style={styles.cancelModifiedButtonText}>Cancel</CustomText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Bottom spacing */}
         <View style={styles.bottomSpacing} />
@@ -1114,5 +1380,184 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  modifyButton: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  modifyButtonText: {
+    color: '#667EEA',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  modificationContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modificationInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#2D3748',
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  modificationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  cancelButton: {
+    backgroundColor: '#E53E3E',
+    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: '#667EEA',
+    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#A0AEC0',
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  modifiedRecipeContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modifiedRecipeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modifiedRecipeTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#2D3748',
+    flex: 1,
+    marginRight: 10,
+  },
+  modifiedRecipeMeta: {
+    flexDirection: 'row',
+  },
+  modifiedMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  modifiedMetaText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  modifiedRecipeContent: {
+    marginBottom: 16,
+  },
+  modifiedSection: {
+    marginBottom: 16,
+  },
+  modifiedSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 12,
+  },
+  modifiedIngredient: {
+    fontSize: 16,
+    color: '#4A5568',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  modifiedStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  modifiedStepNumber: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4A5568',
+    marginRight: 10,
+  },
+  modifiedStepText: {
+    fontSize: 16,
+    color: '#2D3748',
+    lineHeight: 22,
+  },
+  modifiedRecipeActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  saveModifiedButton: {
+    backgroundColor: '#48BB78',
+    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  saveModifiedButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelModifiedButton: {
+    backgroundColor: '#E53E3E',
+    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  cancelModifiedButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
