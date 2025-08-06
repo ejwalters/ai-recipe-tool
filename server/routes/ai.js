@@ -322,29 +322,65 @@ Be as accurate as possible with the extraction. For ingredients and steps, split
 
         const aiResponse = completion.choices[0].message.content;
         
+        console.log('Raw AI Response:', aiResponse);
+        
         // Try to parse the JSON response
+        let recipeData;
         try {
-            const recipeData = JSON.parse(aiResponse);
+            // First, try to extract JSON from the response if it contains extra text
+            let jsonString = aiResponse.trim();
             
-            if (recipeData.error) {
-                return res.status(400).json({ error: recipeData.error });
+            // If the response starts with ```json and ends with ```, extract the content
+            if (jsonString.startsWith('```json')) {
+                jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            } else if (jsonString.startsWith('```')) {
+                jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
             }
-
-            // Validate and clean the data
-            const cleanedData = {
-                title: recipeData.title || '',
-                cookTime: recipeData.cookTime || '',
-                servings: recipeData.servings || '',
-                ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients.filter(i => i.trim()) : [],
-                steps: Array.isArray(recipeData.steps) ? recipeData.steps.filter(s => s.trim()) : [],
-                tags: Array.isArray(recipeData.tags) ? recipeData.tags.filter(t => t.trim()) : []
-            };
-
-            res.json(cleanedData);
+            
+            recipeData = JSON.parse(jsonString);
+            console.log('Parsed Recipe Data:', recipeData);
+            
         } catch (parseError) {
             console.error('Error parsing AI response:', parseError);
-            res.status(500).json({ error: 'Failed to parse recipe data from image' });
+            console.error('Raw response that failed to parse:', aiResponse);
+            
+            // Try to extract JSON using regex as fallback
+            const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    recipeData = JSON.parse(jsonMatch[0]);
+                    console.log('Extracted JSON using regex:', recipeData);
+                } catch (regexParseError) {
+                    console.error('Regex extraction also failed:', regexParseError);
+                    return res.status(500).json({ 
+                        error: 'Failed to parse recipe data from image',
+                        rawResponse: aiResponse.substring(0, 500) // Include first 500 chars for debugging
+                    });
+                }
+            } else {
+                return res.status(500).json({ 
+                    error: 'No valid JSON found in AI response',
+                    rawResponse: aiResponse.substring(0, 500)
+                });
+            }
         }
+        
+        if (recipeData.error) {
+            return res.status(400).json({ error: recipeData.error });
+        }
+
+        // Validate and clean the data
+        const cleanedData = {
+            title: recipeData.title || '',
+            cookTime: recipeData.cookTime || '',
+            servings: recipeData.servings || '',
+            ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients.filter(i => i.trim()) : [],
+            steps: Array.isArray(recipeData.steps) ? recipeData.steps.filter(s => s.trim()) : [],
+            tags: Array.isArray(recipeData.tags) ? recipeData.tags.filter(t => t.trim()) : []
+        };
+
+        console.log('Final cleaned data:', cleanedData);
+        res.json(cleanedData);
 
     } catch (error) {
         console.error('Error processing image:', error);
