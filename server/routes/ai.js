@@ -284,7 +284,7 @@ router.post('/extract-recipe', upload.single('image'), async (req, res) => {
 
         // Call OpenAI Vision API to extract recipe details
         const completion = await openai.chat.completions.create({
-            model: "gpt-4-vision-preview",
+            model: "gpt-4o",
             messages: [
                 {
                     role: "user",
