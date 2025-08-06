@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const { OpenAI } = require('openai');
+const multer = require('multer');
+
+// Setup multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Setup Supabase
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -264,6 +268,87 @@ Example:
         res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /ai/extract-recipe
+router.post('/extract-recipe', upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Convert the image buffer to base64
+        const base64Image = req.file.buffer.toString('base64');
+        const mimeType = req.file.mimetype;
+
+        // Call OpenAI Vision API to extract recipe details
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4-vision-preview",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: `Extract recipe details from this image. Return ONLY a JSON object with the following structure:
+{
+  "title": "Recipe name",
+  "cookTime": "Estimated cooking time (e.g., '30 min')",
+  "servings": "Number of servings (e.g., '4')",
+  "ingredients": ["ingredient 1", "ingredient 2", ...],
+  "steps": ["step 1", "step 2", ...],
+  "tags": ["tag1", "tag2", ...]
+}
+
+If you cannot extract a recipe from the image, return:
+{
+  "error": "No recipe found in image"
+}
+
+Be as accurate as possible with the extraction. For ingredients and steps, split them into individual array items.`
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:${mimeType};base64,${base64Image}`
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens: 1000,
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        
+        // Try to parse the JSON response
+        try {
+            const recipeData = JSON.parse(aiResponse);
+            
+            if (recipeData.error) {
+                return res.status(400).json({ error: recipeData.error });
+            }
+
+            // Validate and clean the data
+            const cleanedData = {
+                title: recipeData.title || '',
+                cookTime: recipeData.cookTime || '',
+                servings: recipeData.servings || '',
+                ingredients: Array.isArray(recipeData.ingredients) ? recipeData.ingredients.filter(i => i.trim()) : [],
+                steps: Array.isArray(recipeData.steps) ? recipeData.steps.filter(s => s.trim()) : [],
+                tags: Array.isArray(recipeData.tags) ? recipeData.tags.filter(t => t.trim()) : []
+            };
+
+            res.json(cleanedData);
+        } catch (parseError) {
+            console.error('Error parsing AI response:', parseError);
+            res.status(500).json({ error: 'Failed to parse recipe data from image' });
+        }
+
+    } catch (error) {
+        console.error('Error processing image:', error);
+        res.status(500).json({ error: 'Failed to process image' });
     }
 });
 
