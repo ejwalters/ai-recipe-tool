@@ -31,46 +31,69 @@ export default function AddRecipeManualScreen() {
 
     // Load extracted data from photo if available
     useEffect(() => {
-        if (params.extractedTitle) {
-            setTitle(params.extractedTitle as string);
-        }
-        if (params.extractedTime) {
-            setTime(params.extractedTime as string);
-        }
-        if (params.extractedServings) {
-            setServings(params.extractedServings as string);
-        }
-        if (params.extractedIngredients) {
-            try {
-                const extractedIngredients = JSON.parse(params.extractedIngredients as string);
-                if (Array.isArray(extractedIngredients) && extractedIngredients.length > 0) {
-                    setIngredients(extractedIngredients);
-                }
-            } catch (error) {
-                console.error('Error parsing extracted ingredients:', error);
+        const loadExtractedData = () => {
+            let hasChanges = false;
+            const updates: any = {};
+
+            if (params.extractedTitle && params.extractedTitle !== title) {
+                updates.title = params.extractedTitle as string;
+                hasChanges = true;
             }
-        }
-        if (params.extractedSteps) {
-            try {
-                const extractedSteps = JSON.parse(params.extractedSteps as string);
-                if (Array.isArray(extractedSteps) && extractedSteps.length > 0) {
-                    setSteps(extractedSteps);
-                }
-            } catch (error) {
-                console.error('Error parsing extracted steps:', error);
+            if (params.extractedTime && params.extractedTime !== time) {
+                updates.time = params.extractedTime as string;
+                hasChanges = true;
             }
-        }
-        if (params.extractedTags) {
-            try {
-                const extractedTags = JSON.parse(params.extractedTags as string);
-                if (Array.isArray(extractedTags) && extractedTags.length > 0) {
-                    setTags(extractedTags);
-                }
-            } catch (error) {
-                console.error('Error parsing extracted tags:', error);
+            if (params.extractedServings && params.extractedServings !== servings) {
+                updates.servings = params.extractedServings as string;
+                hasChanges = true;
             }
-        }
-    }, [params]);
+            if (params.extractedIngredients) {
+                try {
+                    const extractedIngredients = JSON.parse(params.extractedIngredients as string);
+                    if (Array.isArray(extractedIngredients) && extractedIngredients.length > 0) {
+                        updates.ingredients = extractedIngredients;
+                        hasChanges = true;
+                    }
+                } catch (error) {
+                    console.error('Error parsing extracted ingredients:', error);
+                }
+            }
+            if (params.extractedSteps) {
+                try {
+                    const extractedSteps = JSON.parse(params.extractedSteps as string);
+                    if (Array.isArray(extractedSteps) && extractedSteps.length > 0) {
+                        updates.steps = extractedSteps;
+                        hasChanges = true;
+                    }
+                } catch (error) {
+                    console.error('Error parsing extracted steps:', error);
+                }
+            }
+            if (params.extractedTags) {
+                try {
+                    const extractedTags = JSON.parse(params.extractedTags as string);
+                    if (Array.isArray(extractedTags) && extractedTags.length > 0) {
+                        updates.tags = extractedTags;
+                        hasChanges = true;
+                    }
+                } catch (error) {
+                    console.error('Error parsing extracted tags:', error);
+                }
+            }
+
+            // Only update state if there are actual changes
+            if (hasChanges) {
+                if (updates.title !== undefined) setTitle(updates.title);
+                if (updates.time !== undefined) setTime(updates.time);
+                if (updates.servings !== undefined) setServings(updates.servings);
+                if (updates.ingredients !== undefined) setIngredients(updates.ingredients);
+                if (updates.steps !== undefined) setSteps(updates.steps);
+                if (updates.tags !== undefined) setTags(updates.tags);
+            }
+        };
+
+        loadExtractedData();
+    }, [params.extractedTitle, params.extractedTime, params.extractedServings, params.extractedIngredients, params.extractedSteps, params.extractedTags]);
 
     function addTag() {
         const trimmedTag = newTag.trim();

@@ -306,6 +306,8 @@ If you cannot extract a recipe from the image, return:
   "error": "No recipe found in image"
 }
 
+IMPORTANT: If any field cannot be determined from the image, use an empty string ("") instead of "Not specified" or similar text. This allows the form to show placeholder text.
+
 Be as accurate as possible with the extraction. For ingredients and steps, split them into individual array items.`
                         },
                         {
