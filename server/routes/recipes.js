@@ -19,6 +19,42 @@ router.post('/add', async (req, res) => {
     res.json(data);
 });
 
+// PUT /recipes/:id
+router.put('/:id', async (req, res) => {
+    const { id } = req.params;
+    const { user_id, title, time, tags, ingredients, steps } = req.body;
+    
+    if (!user_id || !title || !ingredients || !steps) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // First check if the recipe exists and belongs to the user
+    const { data: existingRecipe, error: fetchError } = await supabase
+        .from('recipes')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+
+    if (fetchError) {
+        return res.status(404).json({ error: 'Recipe not found' });
+    }
+
+    if (existingRecipe.user_id !== user_id) {
+        return res.status(403).json({ error: 'You can only edit your own recipes' });
+    }
+
+    // Update the recipe
+    const { data, error } = await supabase
+        .from('recipes')
+        .update({ title, time, tags, ingredients, steps })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
 // GET /recipes/list
 router.get('/list', async (req, res) => {
     let { limit, q, user_id } = req.query;

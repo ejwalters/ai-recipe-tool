@@ -604,6 +604,23 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     setShowModificationSection(false);
   };
 
+  const handleEditRecipe = () => {
+    // Navigate to the edit recipe screen with the current recipe data
+    router.push({
+      pathname: '/add-recipe-manual',
+      params: {
+        editMode: 'true',
+        recipeId: recipe.id,
+        title: recipe.title,
+        time: recipe.time,
+        servings: recipe.servings,
+        ingredients: JSON.stringify(ingredients),
+        steps: JSON.stringify(steps),
+        tags: JSON.stringify(tags)
+      }
+    });
+  };
+
   function ensureArray(val: any, fallback: string[]): string[] {
     if (Array.isArray(val)) return val;
     if (typeof val === 'string' && val) {
@@ -684,6 +701,17 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
               ) : (
                 <Heart color="#fff" size={24} />
               )}
+            </TouchableOpacity>
+          )}
+
+          {/* Show edit button for recipe owner */}
+          {!isAIRecipe && recipe.user_id === userId && (
+            <TouchableOpacity 
+              style={styles.editButton} 
+              onPress={handleEditRecipe}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="create-outline" size={24} color="#fff" />
             </TouchableOpacity>
           )}
         </View>
@@ -1965,5 +1993,13 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
     backgroundColor: '#fff',
     gap: 12,
+  },
+  editButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 

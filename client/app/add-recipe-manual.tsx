@@ -17,6 +17,17 @@ async function addRecipeToServer({ user_id, title, time, tags, ingredients, step
     return response.json();
 }
 
+// Helper to update recipe on backend
+async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingredients, steps }: { recipeId: string; user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
+    const response = await fetch(`https://familycooksclean.onrender.com/recipes/${recipeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, title, time, tags, ingredients, steps }),
+    });
+    if (!response.ok) throw new Error('Failed to update recipe');
+    return response.json();
+}
+
 export default function AddRecipeManualScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
@@ -28,56 +39,110 @@ export default function AddRecipeManualScreen() {
     const [ingredients, setIngredients] = useState(['']);
     const [steps, setSteps] = useState(['']);
     const [saving, setSaving] = useState(false);
+    
+    // Edit mode state
+    const isEditMode = params.editMode === 'true';
+    const recipeId = params.recipeId as string;
 
     // Load extracted data from photo if available
     useEffect(() => {
-        const loadExtractedData = () => {
+        const loadData = () => {
             let hasChanges = false;
             const updates: any = {};
 
-            if (params.extractedTitle && params.extractedTitle !== title) {
-                updates.title = params.extractedTitle as string;
-                hasChanges = true;
-            }
-            if (params.extractedTime && params.extractedTime !== time) {
-                updates.time = params.extractedTime as string;
-                hasChanges = true;
-            }
-            if (params.extractedServings && params.extractedServings !== servings) {
-                updates.servings = params.extractedServings as string;
-                hasChanges = true;
-            }
-            if (params.extractedIngredients) {
-                try {
-                    const extractedIngredients = JSON.parse(params.extractedIngredients as string);
-                    if (Array.isArray(extractedIngredients) && extractedIngredients.length > 0) {
-                        updates.ingredients = extractedIngredients;
-                        hasChanges = true;
-                    }
-                } catch (error) {
-                    console.error('Error parsing extracted ingredients:', error);
+            // Handle edit mode data
+            if (isEditMode) {
+                if (params.title && params.title !== title) {
+                    updates.title = params.title as string;
+                    hasChanges = true;
                 }
-            }
-            if (params.extractedSteps) {
-                try {
-                    const extractedSteps = JSON.parse(params.extractedSteps as string);
-                    if (Array.isArray(extractedSteps) && extractedSteps.length > 0) {
-                        updates.steps = extractedSteps;
-                        hasChanges = true;
-                    }
-                } catch (error) {
-                    console.error('Error parsing extracted steps:', error);
+                if (params.time && params.time !== time) {
+                    updates.time = params.time as string;
+                    hasChanges = true;
                 }
-            }
-            if (params.extractedTags) {
-                try {
-                    const extractedTags = JSON.parse(params.extractedTags as string);
-                    if (Array.isArray(extractedTags) && extractedTags.length > 0) {
-                        updates.tags = extractedTags;
-                        hasChanges = true;
+                if (params.servings && params.servings !== servings) {
+                    updates.servings = params.servings as string;
+                    hasChanges = true;
+                }
+                if (params.ingredients) {
+                    try {
+                        const editIngredients = JSON.parse(params.ingredients as string);
+                        if (Array.isArray(editIngredients) && editIngredients.length > 0) {
+                            updates.ingredients = editIngredients;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing edit ingredients:', error);
                     }
-                } catch (error) {
-                    console.error('Error parsing extracted tags:', error);
+                }
+                if (params.steps) {
+                    try {
+                        const editSteps = JSON.parse(params.steps as string);
+                        if (Array.isArray(editSteps) && editSteps.length > 0) {
+                            updates.steps = editSteps;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing edit steps:', error);
+                    }
+                }
+                if (params.tags) {
+                    try {
+                        const editTags = JSON.parse(params.tags as string);
+                        if (Array.isArray(editTags) && editTags.length > 0) {
+                            updates.tags = editTags;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing edit tags:', error);
+                    }
+                }
+            } else {
+                // Handle extracted data from photo
+                if (params.extractedTitle && params.extractedTitle !== title) {
+                    updates.title = params.extractedTitle as string;
+                    hasChanges = true;
+                }
+                if (params.extractedTime && params.extractedTime !== time) {
+                    updates.time = params.extractedTime as string;
+                    hasChanges = true;
+                }
+                if (params.extractedServings && params.extractedServings !== servings) {
+                    updates.servings = params.extractedServings as string;
+                    hasChanges = true;
+                }
+                if (params.extractedIngredients) {
+                    try {
+                        const extractedIngredients = JSON.parse(params.extractedIngredients as string);
+                        if (Array.isArray(extractedIngredients) && extractedIngredients.length > 0) {
+                            updates.ingredients = extractedIngredients;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing extracted ingredients:', error);
+                    }
+                }
+                if (params.extractedSteps) {
+                    try {
+                        const extractedSteps = JSON.parse(params.extractedSteps as string);
+                        if (Array.isArray(extractedSteps) && extractedSteps.length > 0) {
+                            updates.steps = extractedSteps;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing extracted steps:', error);
+                    }
+                }
+                if (params.extractedTags) {
+                    try {
+                        const extractedTags = JSON.parse(params.extractedTags as string);
+                        if (Array.isArray(extractedTags) && extractedTags.length > 0) {
+                            updates.tags = extractedTags;
+                            hasChanges = true;
+                        }
+                    } catch (error) {
+                        console.error('Error parsing extracted tags:', error);
+                    }
                 }
             }
 
@@ -92,8 +157,8 @@ export default function AddRecipeManualScreen() {
             }
         };
 
-        loadExtractedData();
-    }, [params.extractedTitle, params.extractedTime, params.extractedServings, params.extractedIngredients, params.extractedSteps, params.extractedTags]);
+        loadData();
+    }, [params.extractedTitle, params.extractedTime, params.extractedServings, params.extractedIngredients, params.extractedSteps, params.extractedTags, params.title, params.time, params.servings, params.ingredients, params.steps, params.tags, isEditMode]);
 
     function addTag() {
         const trimmedTag = newTag.trim();
@@ -141,7 +206,7 @@ export default function AddRecipeManualScreen() {
             const { data } = await supabase.auth.getUser();
             const user_id = data?.user?.id;
             if (!user_id) {
-                Alert.alert('Error', 'You must be logged in to add a recipe.');
+                Alert.alert('Error', 'You must be logged in to save a recipe.');
                 setSaving(false);
                 return;
             }
@@ -155,18 +220,38 @@ export default function AddRecipeManualScreen() {
                 return;
             }
             
-            await addRecipeToServer({
-                user_id,
-                title,
-                time,
-                tags: tags, // Now using the tags array directly
-                ingredients: ingredientsArr,
-                steps: stepsArr,
-            });
-            
-            router.replace('/(tabs)');
+            if (isEditMode) {
+                // Update existing recipe
+                await updateRecipeOnServer({
+                    recipeId,
+                    user_id,
+                    title,
+                    time,
+                    tags: tags,
+                    ingredients: ingredientsArr,
+                    steps: stepsArr,
+                });
+                
+                // Navigate back to the updated recipe
+                router.replace({
+                    pathname: '/recipe-detail',
+                    params: { id: recipeId }
+                });
+            } else {
+                // Add new recipe
+                await addRecipeToServer({
+                    user_id,
+                    title,
+                    time,
+                    tags: tags,
+                    ingredients: ingredientsArr,
+                    steps: stepsArr,
+                });
+                
+                router.replace('/(tabs)');
+            }
         } catch (err: any) {
-            Alert.alert('Error', err.message || 'Failed to add recipe');
+            Alert.alert('Error', err.message || `Failed to ${isEditMode ? 'update' : 'add'} recipe`);
         } finally {
             setSaving(false);
         }
@@ -186,15 +271,17 @@ export default function AddRecipeManualScreen() {
                     <View style={{ flex: 1 }} />
                 </View>
                 <CustomText style={styles.headerText}>
-                    {params.extractedTitle ? 'Edit Extracted Recipe' : 'Create Recipe'}
+                    {isEditMode ? 'Edit Recipe' : (params.extractedTitle ? 'Edit Extracted Recipe' : 'Create Recipe')}
                 </CustomText>
                 <CustomText style={styles.subHeader}>
-                    {params.extractedTitle ? 'Review and edit the extracted recipe details' : 'Add your own recipe from scratch'}
+                    {isEditMode ? 'Make changes to your recipe' : (params.extractedTitle ? 'Review and edit the extracted recipe details' : 'Add your own recipe from scratch')}
                 </CustomText>
-                {params.extractedTitle && (
+                {(params.extractedTitle || isEditMode) && (
                     <View style={styles.extractedIndicator}>
-                        <Ionicons name="sparkles" size={16} color="#6DA98C" />
-                        <CustomText style={styles.extractedText}>AI extracted from photo</CustomText>
+                        <Ionicons name={isEditMode ? "create-outline" : "sparkles"} size={16} color="#6DA98C" />
+                        <CustomText style={styles.extractedText}>
+                            {isEditMode ? 'Editing existing recipe' : 'AI extracted from photo'}
+                        </CustomText>
                     </View>
                 )}
             </View>
