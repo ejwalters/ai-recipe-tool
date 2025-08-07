@@ -424,6 +424,7 @@ You will receive a recipe and a user prompt requesting modifications. Your job i
 2. Modify the recipe accordingly while maintaining its core essence
 3. Ensure the modifications respect any dietary restrictions
 4. Return the modified recipe in the same JSON format
+5. Provide SPECIFIC, DETAILED descriptions of what was changed with exact before/after values
 
 IMPORTANT RULES:
 - Always maintain the recipe's core identity and flavor profile
@@ -434,6 +435,14 @@ IMPORTANT RULES:
 - For dietary restrictions, suggest appropriate substitutions
 - Always return a complete, functional recipe
 
+CRITICAL: For the modifications field, provide SPECIFIC details like:
+- "Reduced olive oil from 3 tbsp to 1 tbsp for lower fat content"
+- "Increased servings from 4 to 6, adjusted all ingredients proportionally"
+- "Substituted 1 lb ground beef with 1 lb plant-based meat alternative"
+- "Added 1 cup diced mushrooms and 2 tbsp soy sauce for umami flavor"
+- "Reduced salt from 1 tsp to 1/2 tsp for lower sodium"
+- "Changed cooking time from 30 min to 45 min due to additional vegetables"
+
 Return ONLY a JSON object with these fields:
 - title (string)
 - time (string, e.g. "30 min")
@@ -441,7 +450,7 @@ Return ONLY a JSON object with these fields:
 - ingredients (array of strings)
 - steps (array of strings)
 - tags (array of strings)
-- modifications (string - brief description of what was changed)
+- modifications (string - SPECIFIC details with exact before/after values, e.g. "Reduced olive oil from 3 tbsp to 1 tbsp, increased servings from 4 to 6, added 1 cup mushrooms")
 
 IMPORTANT: For ingredients and steps, return arrays of strings. Each string should be a single ingredient or step.
 `

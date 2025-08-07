@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
 import { supabase } from '../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 import { Heart, HeartIcon, Book, BookIcon } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -61,6 +62,42 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const modalSlideAnim = useRef(new Animated.Value(0)).current;
+  const resultsModalSlideAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate modification modal
+  useEffect(() => {
+    if (showModificationSection) {
+      Animated.timing(modalSlideAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(modalSlideAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showModificationSection]);
+
+  // Animate results modal
+  useEffect(() => {
+    if (showModifiedRecipe) {
+      Animated.timing(resultsModalSlideAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(resultsModalSlideAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showModifiedRecipe]);
 
   // Fetch user ID on mount
   useEffect(() => {
@@ -539,30 +576,14 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
       }
 
       const savedRecipe = await response.json();
-      Alert.alert(
-        'Success!',
-        'Modified recipe saved to your collection!',
-        [
-          {
-            text: 'View Recipe',
-            onPress: () => {
-              setShowModifiedRecipe(false);
-              setModifiedRecipe(null);
-              router.push({
-                pathname: '/recipe-detail',
-                params: { id: savedRecipe.id }
-              });
-            }
-          },
-          {
-            text: 'Stay Here',
-            onPress: () => {
-              setShowModifiedRecipe(false);
-              setModifiedRecipe(null);
-            }
-          }
-        ]
-      );
+      
+      // Dismiss the modal and navigate to the new recipe
+      setShowModifiedRecipe(false);
+      setModifiedRecipe(null);
+      router.replace({
+        pathname: '/recipe-detail',
+        params: { id: savedRecipe.id }
+      });
 
     } catch (error: any) {
       console.error('Error saving modified recipe:', error);
@@ -872,20 +893,56 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             </CustomText>
           </View>
           
-          {!showModificationSection ? (
-            <TouchableOpacity
-              style={styles.modifyButton}
-              onPress={() => setShowModificationSection(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="sparkles" size={20} color="#667EEA" />
-              <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.modificationContainer}>
+          <TouchableOpacity
+            style={styles.modifyButton}
+            onPress={() => setShowModificationSection(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="sparkles" size={20} color="#667EEA" />
+            <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom spacing */}
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+
+      {/* AI Modification Modal */}
+      {showModificationSection && (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            onPress={() => setShowModificationSection(false)}
+            activeOpacity={1}
+          />
+          <Animated.View 
+            style={[
+              styles.modalContainer,
+              { 
+                transform: [{ 
+                  translateY: modalSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [300, 0]
+                  })
+                }] 
+              }
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHandle} />
+              <CustomText style={styles.modalTitle}>Modify Recipe</CustomText>
+              <TouchableOpacity 
+                onPress={() => setShowModificationSection(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalContent}>
               <TextInput
                 style={styles.modificationInput}
-                placeholder="Describe how you'd like to modify this recipe (e.g., 'Make it vegetarian', 'Double the servings', 'Make it spicier')"
+                placeholder="Describe how you'd like to modify this recipe..."
                 placeholderTextColor="#A0AEC0"
                 value={modificationPrompt}
                 onChangeText={setModificationPrompt}
@@ -894,115 +951,195 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                 textAlignVertical="top"
               />
               
-              <View style={styles.modificationButtons}>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => {
-                    setShowModificationSection(false);
-                    setModificationPrompt('');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <CustomText style={styles.cancelButtonText}>Cancel</CustomText>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.submitButton, !modificationPrompt.trim() && styles.submitButtonDisabled]}
-                  onPress={handleModifyRecipe}
-                  disabled={!modificationPrompt.trim() || isModifying}
-                  activeOpacity={0.8}
-                >
-                  {isModifying ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={16} color="#fff" />
-                      <CustomText style={styles.submitButtonText}>Modify</CustomText>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.submitButton, !modificationPrompt.trim() && styles.submitButtonDisabled]}
+                onPress={handleModifyRecipe}
+                disabled={!modificationPrompt.trim() || isModifying}
+                activeOpacity={0.8}
+              >
+                {isModifying ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={16} color="#fff" />
+                    <CustomText style={styles.submitButtonText}>Generate Modifications</CustomText>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          )}
+          </Animated.View>
         </View>
+      )}
 
-        {/* Modified Recipe Preview */}
-        {showModifiedRecipe && modifiedRecipe && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#48BB78" />
-              <CustomText style={styles.sectionTitle}>Modified Recipe</CustomText>
-              <CustomText style={styles.sectionSubtitle}>
-                {modifiedRecipe.modifications || 'Recipe modified based on your request'}
-              </CustomText>
+      {/* Modified Recipe Results Modal */}
+      {showModifiedRecipe && modifiedRecipe && (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            onPress={handleCancelModification}
+            activeOpacity={1}
+          />
+          <Animated.View 
+            style={[
+              styles.resultsModalContainer,
+              { 
+                transform: [{ 
+                  translateY: resultsModalSlideAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [400, 0]
+                  })
+                }] 
+              }
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <CustomText style={styles.modalTitle}>Proposed Changes</CustomText>
+              <TouchableOpacity 
+                onPress={handleCancelModification}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#6B7280" />
+              </TouchableOpacity>
             </View>
             
-            <View style={styles.modifiedRecipeContainer}>
-              <View style={styles.modifiedRecipeHeader}>
-                <CustomText style={styles.modifiedRecipeTitle}>{modifiedRecipe.title}</CustomText>
-                <View style={styles.modifiedRecipeMeta}>
-                  <View style={styles.modifiedMetaItem}>
-                    <Ionicons name="time-outline" size={14} color="#6B7280" />
-                    <CustomText style={styles.modifiedMetaText}>{modifiedRecipe.time}</CustomText>
+            <View style={styles.resultsModalContent}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* Changes Summary */}
+                <View style={styles.changesSummary}>
+                  <View style={styles.changesHeader}>
+                    <Ionicons name="sparkles" size={20} color="#48BB78" />
+                    <CustomText style={styles.changesSummaryTitle}>AI Suggested Modifications</CustomText>
                   </View>
-                  <View style={styles.modifiedMetaItem}>
-                    <Ionicons name="restaurant-outline" size={14} color="#6B7280" />
-                    <CustomText style={styles.modifiedMetaText}>{modifiedRecipe.servings}</CustomText>
+                  <CustomText style={styles.changesSummaryText}>
+                    {modifiedRecipe.modifications || 'Recipe has been modified based on your request'}
+                  </CustomText>
+                  
+                  {/* Highlight specific changes */}
+                  <View style={styles.changesList}>
+                    {recipe.title !== modifiedRecipe.title && (
+                      <View style={styles.changeItem}>
+                        <View style={styles.changeIconContainer}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.changeContent}>
+                          <CustomText style={styles.changeLabel}>Title</CustomText>
+                          <CustomText style={styles.changeText}>
+                            <CustomText style={styles.changeOld}>"{recipe.title}"</CustomText>
+                            <CustomText style={styles.changeArrow}> → </CustomText>
+                            <CustomText style={styles.changeNew}>"{modifiedRecipe.title}"</CustomText>
+                          </CustomText>
+                        </View>
+                      </View>
+                    )}
+                    {recipe.time !== modifiedRecipe.time && (
+                      <View style={styles.changeItem}>
+                        <View style={styles.changeIconContainer}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.changeContent}>
+                          <CustomText style={styles.changeLabel}>Cooking Time</CustomText>
+                          <CustomText style={styles.changeText}>
+                            <CustomText style={styles.changeOld}>{recipe.time}</CustomText>
+                            <CustomText style={styles.changeArrow}> → </CustomText>
+                            <CustomText style={styles.changeNew}>{modifiedRecipe.time}</CustomText>
+                          </CustomText>
+                        </View>
+                      </View>
+                    )}
+                    {recipe.servings !== modifiedRecipe.servings && (
+                      <View style={styles.changeItem}>
+                        <View style={styles.changeIconContainer}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.changeContent}>
+                          <CustomText style={styles.changeLabel}>Servings</CustomText>
+                          <CustomText style={styles.changeText}>
+                            <CustomText style={styles.changeOld}>{recipe.servings}</CustomText>
+                            <CustomText style={styles.changeArrow}> → </CustomText>
+                            <CustomText style={styles.changeNew}>{modifiedRecipe.servings}</CustomText>
+                          </CustomText>
+                        </View>
+                      </View>
+                    )}
+                    {ingredients.length !== (modifiedRecipe.ingredients?.length || 0) && (
+                      <View style={styles.changeItem}>
+                        <View style={styles.changeIconContainer}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.changeContent}>
+                          <CustomText style={styles.changeLabel}>Ingredients</CustomText>
+                          <CustomText style={styles.changeText}>
+                            <CustomText style={styles.changeOld}>{ingredients.length} items</CustomText>
+                            <CustomText style={styles.changeArrow}> → </CustomText>
+                            <CustomText style={styles.changeNew}>{modifiedRecipe.ingredients?.length || 0} items</CustomText>
+                            {modifiedRecipe.ingredients && modifiedRecipe.ingredients.length > ingredients.length && (
+                              <CustomText style={styles.changeDetail}> (+{modifiedRecipe.ingredients.length - ingredients.length} added)</CustomText>
+                            )}
+                          </CustomText>
+                        </View>
+                      </View>
+                    )}
+                    {steps.length !== (modifiedRecipe.steps?.length || 0) && (
+                      <View style={styles.changeItem}>
+                        <View style={styles.changeIconContainer}>
+                          <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        </View>
+                        <View style={styles.changeContent}>
+                          <CustomText style={styles.changeLabel}>Instructions</CustomText>
+                          <CustomText style={styles.changeText}>
+                            <CustomText style={styles.changeOld}>{steps.length} steps</CustomText>
+                            <CustomText style={styles.changeArrow}> → </CustomText>
+                            <CustomText style={styles.changeNew}>{modifiedRecipe.steps?.length || 0} steps</CustomText>
+                            {modifiedRecipe.steps && modifiedRecipe.steps.length > steps.length && (
+                              <CustomText style={styles.changeDetail}> (+{modifiedRecipe.steps.length - steps.length} added)</CustomText>
+                            )}
+                          </CustomText>
+                        </View>
+                      </View>
+                    )}
+                    
+                    {/* Show specific ingredient changes if mentioned in modifications */}
+                    {modifiedRecipe.modifications && (
+                      <View style={styles.specificChangesContainer}>
+                        <CustomText style={styles.specificChangesTitle}>Specific Changes:</CustomText>
+                        <CustomText style={styles.specificChangesText}>
+                          {modifiedRecipe.modifications}
+                        </CustomText>
+                      </View>
+                    )}
                   </View>
                 </View>
-              </View>
-              
-              <View style={styles.modifiedRecipeContent}>
-                <View style={styles.modifiedSection}>
-                  <CustomText style={styles.modifiedSectionTitle}>Ingredients</CustomText>
-                  {modifiedRecipe.ingredients?.map((ing: string, idx: number) => (
-                    <CustomText key={idx} style={styles.modifiedIngredient}>• {ing}</CustomText>
-                  ))}
-                </View>
-                
-                <View style={styles.modifiedSection}>
-                  <CustomText style={styles.modifiedSectionTitle}>Instructions</CustomText>
-                  {modifiedRecipe.steps?.map((step: string, idx: number) => (
-                    <View key={idx} style={styles.modifiedStep}>
-                      <CustomText style={styles.modifiedStepNumber}>{idx + 1}.</CustomText>
-                      <CustomText style={styles.modifiedStepText}>{step}</CustomText>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              
-              <View style={styles.modifiedRecipeActions}>
-                <TouchableOpacity
-                  style={styles.saveModifiedButton}
-                  onPress={handleSaveModifiedRecipe}
-                  disabled={savingModified}
-                  activeOpacity={0.8}
-                >
-                  {savingModified ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="save-outline" size={16} color="#fff" />
-                      <CustomText style={styles.saveModifiedButtonText}>Save Modified Recipe</CustomText>
-                    </>
-                  )}
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.cancelModifiedButton}
-                  onPress={handleCancelModification}
-                  activeOpacity={0.8}
-                >
-                  <CustomText style={styles.cancelModifiedButtonText}>Cancel</CustomText>
-                </TouchableOpacity>
-              </View>
+              </ScrollView>
             </View>
-          </View>
-        )}
-
-        {/* Bottom spacing */}
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+            
+            <View style={styles.resultsModalActions}>
+              <TouchableOpacity
+                style={styles.saveModifiedButton}
+                onPress={handleSaveModifiedRecipe}
+                disabled={savingModified}
+                activeOpacity={0.8}
+              >
+                {savingModified ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="add-circle" size={16} color="#fff" />
+                    <CustomText style={styles.saveModifiedButtonText}>Save as New Recipe</CustomText>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.cancelModifiedButton}
+                onPress={handleCancelModification}
+                activeOpacity={0.8}
+              >
+                <CustomText style={styles.cancelModifiedButtonText}>Keep Original</CustomText>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1411,12 +1548,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     fontSize: 16,
     color: '#2D3748',
     minHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: 16,
+    marginBottom: 20,
+    backgroundColor: '#F7FAFC',
   },
   modificationButtons: {
     flexDirection: 'row',
@@ -1440,21 +1578,27 @@ const styles = StyleSheet.create({
   submitButton: {
     backgroundColor: '#667EEA',
     borderRadius: 12,
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 10,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    shadowColor: '#667EEA',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   submitButtonDisabled: {
     backgroundColor: '#A0AEC0',
-    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 4,
+    marginLeft: 8,
   },
   modifiedRecipeContainer: {
     backgroundColor: '#fff',
@@ -1473,7 +1617,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modifiedRecipeTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#2D3748',
     flex: 1,
@@ -1481,6 +1625,7 @@ const styles = StyleSheet.create({
   },
   modifiedRecipeMeta: {
     flexDirection: 'row',
+    marginBottom: 20,
   },
   modifiedMetaItem: {
     flexDirection: 'row',
@@ -1536,28 +1681,316 @@ const styles = StyleSheet.create({
     backgroundColor: '#48BB78',
     borderRadius: 12,
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    marginRight: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    shadowColor: '#48BB78',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveModifiedButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
+    marginLeft: 6,
   },
   cancelModifiedButton: {
     backgroundColor: '#E53E3E',
     borderRadius: 12,
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    marginLeft: 10,
+    shadowColor: '#E53E3E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cancelModifiedButtonText: {
     color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modifiedBadge: {
+    backgroundColor: '#667EEA',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  modifiedBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  changesSummary: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  changesSummaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginLeft: 8,
+  },
+  changesSummaryText: {
+    fontSize: 15,
+    color: '#4A5568',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  changesList: {
+    marginTop: 8,
+  },
+  changeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  changeText: {
+    fontSize: 15,
+    color: '#2D3748',
+    fontWeight: '500',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  changesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  changeIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#48BB78',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  changeContent: {
+    flex: 1,
+  },
+  changeLabel: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  changeOld: {
+    fontWeight: '600',
+    color: '#4A5568',
+  },
+  changeArrow: {
+    fontSize: 14,
+    color: '#4A5568',
+    marginHorizontal: 4,
+  },
+  changeNew: {
+    fontWeight: '600',
+    color: '#48BB78',
+  },
+  changeDetail: {
+    fontSize: 14,
+    color: '#48BB78',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+
+  quickPreview: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  quickPreviewTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 16,
+  },
+  previewSection: {
+    marginBottom: 20,
+  },
+  previewSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 12,
+  },
+  previewList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  previewItem: {
+    fontSize: 15,
+    color: '#4A5568',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  previewMore: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  previewStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  previewStepNumber: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4A5568',
+    marginRight: 10,
+  },
+  previewStepText: {
+    fontSize: 15,
+    color: '#2D3748',
+    lineHeight: 22,
+    flex: 1,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    maxHeight: '70%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2D3748',
+    flex: 1,
+    textAlign: 'center',
+  },
+  modalCloseButton: {
+    padding: 5,
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  resultsModalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    maxHeight: '95%',
+    minHeight: '60%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  resultsModalContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  resultsModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+  specificChangesContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  specificChangesTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  specificChangesText: {
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 20,
   },
 }); 
