@@ -929,7 +929,6 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             ]}
           >
             <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
               <CustomText style={styles.modalTitle}>Modify Recipe</CustomText>
               <TouchableOpacity 
                 onPress={() => setShowModificationSection(false)}
@@ -1095,16 +1094,6 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                             )}
                           </CustomText>
                         </View>
-                      </View>
-                    )}
-                    
-                    {/* Show specific ingredient changes if mentioned in modifications */}
-                    {modifiedRecipe.modifications && (
-                      <View style={styles.specificChangesContainer}>
-                        <CustomText style={styles.specificChangesTitle}>Specific Changes:</CustomText>
-                        <CustomText style={styles.specificChangesText}>
-                          {modifiedRecipe.modifications}
-                        </CustomText>
                       </View>
                     )}
                   </View>
@@ -1942,6 +1931,7 @@ const styles = StyleSheet.create({
   modalContent: {
     paddingHorizontal: 20,
     paddingVertical: 20,
+    paddingBottom: 30,
   },
   resultsModalContainer: {
     backgroundColor: '#fff',
@@ -1975,22 +1965,5 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
     backgroundColor: '#fff',
     gap: 12,
-  },
-  specificChangesContainer: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  specificChangesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2D3748',
-    marginBottom: 8,
-  },
-  specificChangesText: {
-    fontSize: 14,
-    color: '#4A5568',
-    lineHeight: 20,
   },
 }); 
