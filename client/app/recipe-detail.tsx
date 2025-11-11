@@ -1307,22 +1307,37 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                 </View>
                 
                 {/* Tags */}
-                <View style={styles.editTagsContainer}>
-                  {editTags.map((tag, index) => (
-                    <View key={index} style={styles.editTagChip}>
-                      <CustomText style={styles.editTagText}>{tag}</CustomText>
-                      <TouchableOpacity onPress={() => removeEditTag(tag)}>
-                        <Ionicons name="close-circle" size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TextInput
-                    style={styles.editNewTagInput}
-                    placeholder="Add tag"
-                    value={editNewTag}
-                    onChangeText={setEditNewTag}
-                    onSubmitEditing={addEditTag}
-                  />
+                <View style={styles.editTagsSection}>
+                  <View style={styles.editTagsContainer}>
+                    {editTags.map((tag, index) => (
+                      <View key={index} style={styles.editTagChip}>
+                        <CustomText style={styles.editTagText}>{tag}</CustomText>
+                        <TouchableOpacity onPress={() => removeEditTag(tag)}>
+                          <Ionicons name="close-circle" size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.editNewTagRow}>
+                    <Ionicons name="pricetag-outline" size={18} color="#6DA98C" style={styles.editNewTagIcon} />
+                    <TextInput
+                      style={styles.editNewTagInput}
+                      placeholder="Add a tag"
+                      placeholderTextColor="#9CA3AF"
+                      value={editNewTag}
+                      onChangeText={setEditNewTag}
+                      onSubmitEditing={addEditTag}
+                      returnKeyType="done"
+                    />
+                    <TouchableOpacity
+                      style={[styles.editNewTagButton, !editNewTag.trim() && styles.editNewTagButtonDisabled]}
+                      onPress={addEditTag}
+                      disabled={!editNewTag.trim()}
+                    >
+                      <Ionicons name="add" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                  <CustomText style={styles.editTagHelper}>Press return or tap add to save the tag</CustomText>
                 </View>
               </View>
 
@@ -2314,11 +2329,15 @@ const styles = StyleSheet.create({
   editFlexInput: {
     flex: 1,
   },
+  editTagsSection: {
+    marginTop: 10,
+    marginBottom: 10,
+    gap: 12,
+  },
   editTagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
-    marginBottom: 10,
+    gap: 8,
   },
   editTagChip: {
     backgroundColor: '#E2E8F0',
@@ -2337,13 +2356,37 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   editNewTagInput: {
+    flex: 1,
+    paddingVertical: 6,
+    fontSize: 15,
+    color: '#1F2937',
+  },
+  editNewTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#2D3748',
     backgroundColor: '#F7FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  editNewTagIcon: {
+    marginRight: 2,
+  },
+  editNewTagButton: {
+    backgroundColor: '#6DA98C',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  editNewTagButtonDisabled: {
+    backgroundColor: '#C7DAD0',
+  },
+  editTagHelper: {
+    fontSize: 12,
+    color: '#6B7280',
   },
   editInputRow: {
     flexDirection: 'row',

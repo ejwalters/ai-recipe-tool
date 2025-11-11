@@ -8,6 +8,13 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { profileService } from '../lib/profileService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type ProfileState = {
+    name: string;
+    email: string;
+    phone: string;
+    avatar_url: string;
+};
+
 export default function EditProfileScreen() {
     const router = useRouter();
     const [name, setName] = useState('');
@@ -16,6 +23,12 @@ export default function EditProfileScreen() {
     const [avatarUrl, setAvatarUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [initialProfile, setInitialProfile] = useState<ProfileState>({
+        name: '',
+        email: '',
+        phone: '',
+        avatar_url: '',
+    });
 
     useEffect(() => {
         loadProfile();
@@ -25,10 +38,17 @@ export default function EditProfileScreen() {
         setLoading(true);
         try {
             const profile = await profileService.getProfile();
-            setName(profile.name || '');
-            setEmail(profile.email || '');
-            setPhone(profile.phone || '');
-            setAvatarUrl(profile.avatar_url || '');
+            const currentProfile: ProfileState = {
+                name: profile.name || '',
+                email: profile.email || '',
+                phone: profile.phone || '',
+                avatar_url: profile.avatar_url || '',
+            };
+            setName(currentProfile.name);
+            setEmail(currentProfile.email);
+            setPhone(currentProfile.phone);
+            setAvatarUrl(currentProfile.avatar_url);
+            setInitialProfile(currentProfile);
         } catch (e) {
             console.log('Profile load error:', e);
             Alert.alert('Error', 'Failed to load profile');
@@ -62,15 +82,30 @@ export default function EditProfileScreen() {
         }
     };
 
+    const hasChanges =
+        name !== initialProfile.name ||
+        email !== initialProfile.email ||
+        phone !== initialProfile.phone ||
+        avatarUrl !== initialProfile.avatar_url;
+    const isDisabled = !hasChanges || saving || loading;
+
     const handleSave = async () => {
+        if (!hasChanges) {
+            return;
+        }
         setSaving(true);
         try {
-            await profileService.updateProfile({
+            const updatedProfile: ProfileState = {
                 name: name.trim(),
                 email: email.trim(),
                 phone: phone.trim(),
                 avatar_url: avatarUrl,
-            });
+            };
+            await profileService.updateProfile(updatedProfile);
+            setName(updatedProfile.name);
+            setEmail(updatedProfile.email);
+            setPhone(updatedProfile.phone);
+            setInitialProfile(updatedProfile);
             Alert.alert('Success', 'Profile updated!');
         } catch {
             Alert.alert('Error', 'Failed to update profile');
@@ -163,9 +198,13 @@ export default function EditProfileScreen() {
                     {/* Save Button */}
                     <View style={styles.saveContainer}>
                         <TouchableOpacity 
-                            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+                            style={[
+                                styles.saveButton,
+                                hasChanges ? styles.saveButtonActive : styles.saveButtonInactive,
+                                (saving || loading) && styles.saveButtonLoading,
+                            ]} 
                             onPress={handleSave}
-                            disabled={saving}
+                            disabled={isDisabled}
                             activeOpacity={0.92}
                         >
                             {saving ? (
@@ -297,21 +336,31 @@ const styles = StyleSheet.create({
         paddingHorizontal: 18,
     },
     saveButton: {
-        backgroundColor: '#B6E2D3',
         borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         height: 52,
-        shadowColor: '#B6E2D3',
+        backgroundColor: '#D1D5DB',
+    },
+    saveButtonInactive: {
+        backgroundColor: '#D1D5DB',
+        shadowColor: '#D1D5DB',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    saveButtonActive: {
+        backgroundColor: '#34D399',
+        shadowColor: '#34D399',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 4,
     },
-    saveButtonDisabled: {
-        backgroundColor: '#9CA3AF',
-        shadowOpacity: 0.1,
+    saveButtonLoading: {
+        opacity: 0.85,
     },
     saveButtonText: {
         color: '#fff',

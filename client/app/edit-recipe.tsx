@@ -219,24 +219,37 @@ export default function EditRecipeScreen() {
                     </View>
                     
                     {/* Tags */}
-                    <View style={styles.tagsContainer}>
-                        {tags.map((tag, index) => (
-                            <View key={index} style={styles.tagChip}>
-                                <CustomText style={styles.tagText}>{tag}</CustomText>
-                                <TouchableOpacity onPress={() => removeTag(tag)}>
-                                    <Ionicons name="close-circle" size={16} color="#EF4444" />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                        <TextInput
-                            style={styles.newTagInput}
-                            placeholder="Add tags (press Enter to add)"
-                            placeholderTextColor="#B0B0B0"
-                            value={newTag}
-                            onChangeText={setNewTag}
-                            onSubmitEditing={addTag}
-                            returnKeyType="done"
-                        />
+                    <View style={styles.tagsSection}>
+                        <View style={styles.tagsContainer}>
+                            {tags.map((tag, index) => (
+                                <View key={index} style={styles.tagChip}>
+                                    <CustomText style={styles.tagText}>{tag}</CustomText>
+                                    <TouchableOpacity onPress={() => removeTag(tag)}>
+                                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                        <View style={styles.newTagRow}>
+                            <Ionicons name="pricetag-outline" size={18} color="#6DA98C" style={styles.newTagIcon} />
+                            <TextInput
+                                style={styles.newTagInput}
+                                placeholder="Add a tag"
+                                placeholderTextColor="#9CA3AF"
+                                value={newTag}
+                                onChangeText={setNewTag}
+                                onSubmitEditing={addTag}
+                                returnKeyType="done"
+                            />
+                            <TouchableOpacity
+                                style={[styles.newTagButton, !newTag.trim() && styles.newTagButtonDisabled]}
+                                onPress={addTag}
+                                disabled={!newTag.trim()}
+                            >
+                                <Ionicons name="add" size={18} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                        <CustomText style={styles.tagHelper}>Press return or tap add to save the tag</CustomText>
                     </View>
                 </View>
 
@@ -501,11 +514,14 @@ const styles = StyleSheet.create({
         minHeight: 60,
         textAlignVertical: 'top',
     },
+    tagsSection: {
+        marginTop: 12,
+        gap: 12,
+    },
     tagsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
-        marginTop: 12,
     },
     tagChip: {
         flexDirection: 'row',
@@ -522,15 +538,37 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     newTagInput: {
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 16,
-        paddingHorizontal: 12,
+        flex: 1,
         paddingVertical: 6,
         fontSize: 14,
-        color: '#222',
+        color: '#111827',
+    },
+    newTagRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
         backgroundColor: '#F9FAFB',
-        minWidth: 120,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    newTagIcon: {
+        marginRight: 2,
+    },
+    newTagButton: {
+        backgroundColor: '#6DA98C',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+    },
+    newTagButtonDisabled: {
+        backgroundColor: '#C7DAD0',
+    },
+    tagHelper: {
+        fontSize: 12,
+        color: '#6B7280',
     },
     saveButton: {
         flexDirection: 'row',

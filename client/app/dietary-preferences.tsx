@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function DietaryPreferencesScreen() {
     const router = useRouter();
     const [preferences, setPreferences] = useState('');
+    const [initialPreferences, setInitialPreferences] = useState('');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -18,7 +19,9 @@ export default function DietaryPreferencesScreen() {
             setLoading(true);
             try {
                 const profile = await profileService.getProfile();
-                setPreferences(profile.dietary_preferences || '');
+                const currentPreferences = profile.dietary_preferences || '';
+                setPreferences(currentPreferences);
+                setInitialPreferences(currentPreferences);
             } catch (e) {
                 console.log('Failed to load dietary preferences:', e);
             }
@@ -27,10 +30,17 @@ export default function DietaryPreferencesScreen() {
         loadPreferences();
     }, []);
 
+    const hasChanges = preferences !== initialPreferences;
+    const isDisabled = !hasChanges || saving || loading;
+
     const handleSave = async () => {
+        if (!hasChanges) {
+            return;
+        }
         setSaving(true);
         try {
             await profileService.updateProfile({ dietary_preferences: preferences });
+            setInitialPreferences(preferences);
             alert('Dietary preferences updated!');
             router.back();
         } catch (e) {
@@ -92,9 +102,13 @@ export default function DietaryPreferencesScreen() {
                     {/* Save Button */}
                     <View style={styles.saveContainer}>
                         <TouchableOpacity 
-                            style={[styles.saveButton, (saving || loading) && styles.saveButtonDisabled]} 
+                            style={[
+                                styles.saveButton,
+                                hasChanges ? styles.saveButtonActive : styles.saveButtonInactive,
+                                (saving || loading) && styles.saveButtonLoading,
+                            ]} 
                             onPress={handleSave} 
-                            disabled={saving || loading}
+                            disabled={isDisabled}
                             activeOpacity={0.92}
                         >
                             {saving ? (
@@ -233,21 +247,31 @@ const styles = StyleSheet.create({
         paddingHorizontal: 18,
     },
     saveButton: {
-        backgroundColor: '#B6E2D3',
         borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         height: 52,
-        shadowColor: '#B6E2D3',
+        backgroundColor: '#D1D5DB',
+    },
+    saveButtonInactive: {
+        backgroundColor: '#D1D5DB',
+        shadowColor: '#D1D5DB',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    saveButtonActive: {
+        backgroundColor: '#34D399',
+        shadowColor: '#34D399',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 4,
     },
-    saveButtonDisabled: {
-        backgroundColor: '#9CA3AF',
-        shadowOpacity: 0.1,
+    saveButtonLoading: {
+        opacity: 0.85,
     },
     saveButtonText: {
         color: '#fff',
