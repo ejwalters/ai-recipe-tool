@@ -187,34 +187,17 @@ router.get('/tags/popular', async (req, res) => {
 // GET /recipes/:id
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
-    const { user_id } = req.query;
-    if (!id) return res.status(400).json({ error: 'Missing recipe id' });
+    
     const { data, error } = await supabase
         .from('recipes')
         .select('*')
         .eq('id', id)
         .single();
-    console.log('Raw database query result:', { data, error });
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'Recipe not found' });
-    
-    // If user_id is provided, check if this recipe is favorited
-    if (user_id) {
-        const { data: fav, error: favError } = await supabase
-            .from('favorites')
-            .select('recipe_id')
-            .eq('user_id', user_id)
-            .eq('recipe_id', id)
-            .single();
-        
-        if (!favError && fav) {
-            data.is_favorited = true;
-        } else {
-            data.is_favorited = false;
-        }
+
+    if (error) {
+        return res.status(404).json({ error: 'Recipe not found' });
     }
     
-    console.log('Recipe endpoint returning:', data);
     res.json(data);
 });
 

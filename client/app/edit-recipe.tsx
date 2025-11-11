@@ -1,21 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-
-// Helper to call backend
-async function addRecipeToServer({ user_id, title, time, tags, ingredients, steps }: { user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
-    const response = await fetch('https://familycooksclean.onrender.com/recipes/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, title, time, tags, ingredients, steps }),
-    });
-    if (!response.ok) throw new Error('Failed to add recipe');
-    return response.json();
-}
+import { recipeStore } from '../lib/recipeStore';
 
 // Helper to update recipe on backend
 async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingredients, steps }: { recipeId: string; user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
@@ -28,18 +17,9 @@ async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingr
     return response.json();
 }
 
-export default function AddRecipeManualScreen() {
+export default function EditRecipeScreen() {
     const router = useRouter();
-    const params = useLocalSearchParams();
     
-    // Edit mode state
-    const isEditMode = params.editMode === 'true';
-    const recipeId = params.recipeId as string;
-    
-    // Ref to track if we've already initialized
-    const initializedRef = useRef(false);
-    
-    // Initialize state with empty values first
     const [title, setTitle] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [newTag, setNewTag] = useState('');
@@ -48,92 +28,29 @@ export default function AddRecipeManualScreen() {
     const [ingredients, setIngredients] = useState(['']);
     const [steps, setSteps] = useState(['']);
     const [saving, setSaving] = useState(false);
-    
-    // Initialize data only once when component mounts
+    const [loading, setLoading] = useState(true);
+    const [recipeId, setRecipeId] = useState('');
+
+    // Load recipe data from global store on mount
     useEffect(() => {
-        if (initializedRef.current) return;
+        const recipe = recipeStore.getEditRecipe();
         
-        // Set initial values based on params
-        if (isEditMode) {
-            if (params.title) setTitle(params.title as string);
-            if (params.time) setTime(params.time as string);
-            if (params.servings) setServings(params.servings as string);
-            
-            if (params.ingredients) {
-                try {
-                    const parsed = JSON.parse(params.ingredients as string);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setIngredients(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing ingredients:', error);
-                }
-            }
-            
-            if (params.steps) {
-                try {
-                    const parsed = JSON.parse(params.steps as string);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setSteps(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing steps:', error);
-                }
-            }
-            
-            if (params.tags) {
-                try {
-                    const parsed = JSON.parse(params.tags as string);
-                    if (Array.isArray(parsed)) {
-                        setTags(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing tags:', error);
-                }
-            }
-        } else {
-            // Handle extracted data from photo
-            if (params.extractedTitle) setTitle(params.extractedTitle as string);
-            if (params.extractedTime) setTime(params.extractedTime as string);
-            if (params.extractedServings) setServings(params.extractedServings as string);
-            
-            if (params.extractedIngredients) {
-                try {
-                    const parsed = JSON.parse(params.extractedIngredients as string);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setIngredients(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing extracted ingredients:', error);
-                }
-            }
-            
-            if (params.extractedSteps) {
-                try {
-                    const parsed = JSON.parse(params.extractedSteps as string);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setSteps(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing extracted steps:', error);
-                }
-            }
-            
-            if (params.extractedTags) {
-                try {
-                    const parsed = JSON.parse(params.extractedTags as string);
-                    if (Array.isArray(parsed)) {
-                        setTags(parsed);
-                    }
-                } catch (error) {
-                    console.error('Error parsing extracted tags:', error);
-                }
-            }
+        if (!recipe) {
+            Alert.alert('Error', 'No recipe data found');
+            router.back();
+            return;
         }
         
-        initializedRef.current = true;
-    }, []); // Empty dependency array - only run once
-    
+        setRecipeId(recipe.id);
+        setTitle(recipe.title || '');
+        setTime(recipe.time || '');
+        setServings(recipe.servings || '');
+        setIngredients(Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 ? recipe.ingredients : ['']);
+        setSteps(Array.isArray(recipe.steps) && recipe.steps.length > 0 ? recipe.steps : ['']);
+        setTags(Array.isArray(recipe.tags) ? recipe.tags : []);
+        setLoading(false);
+    }, []);
+
     function addTag() {
         const trimmedTag = newTag.trim();
         if (trimmedTag && !tags.includes(trimmedTag)) {
@@ -157,7 +74,9 @@ export default function AddRecipeManualScreen() {
     }
 
     function updateIngredient(idx: number, value: string) {
-        setIngredients(ingredients.map((ing, i) => (i === idx ? value : ing)));
+        const newIngredients = [...ingredients];
+        newIngredients[idx] = value;
+        setIngredients(newIngredients);
     }
 
     function addStep() {
@@ -171,7 +90,9 @@ export default function AddRecipeManualScreen() {
     }
 
     function updateStep(idx: number, value: string) {
-        setSteps(steps.map((step, i) => (i === idx ? value : step)));
+        const newSteps = [...steps];
+        newSteps[idx] = value;
+        setSteps(newSteps);
     }
 
     async function handleSaveRecipe() {
@@ -194,41 +115,36 @@ export default function AddRecipeManualScreen() {
                 return;
             }
             
-            if (isEditMode) {
-                // Update existing recipe
-                await updateRecipeOnServer({
-                    recipeId,
-                    user_id,
-                    title,
-                    time,
-                    tags: tags,
-                    ingredients: ingredientsArr,
-                    steps: stepsArr,
-                });
-                
-                // Navigate back to the updated recipe
-                router.replace({
-                    pathname: '/recipe-detail',
-                    params: { id: recipeId }
-                });
-            } else {
-                // Add new recipe
-                await addRecipeToServer({
-                    user_id,
-                    title,
-                    time,
-                    tags: tags,
-                    ingredients: ingredientsArr,
-                    steps: stepsArr,
-                });
-                
-                router.replace('/(tabs)');
-            }
+            await updateRecipeOnServer({
+                recipeId,
+                user_id,
+                title,
+                time,
+                tags: tags,
+                ingredients: ingredientsArr,
+                steps: stepsArr,
+            });
+            
+            // Clear the store and navigate back to the updated recipe
+            recipeStore.clearEditRecipe();
+            router.replace({
+                pathname: '/recipe-detail',
+                params: { id: recipeId }
+            });
         } catch (err: any) {
-            Alert.alert('Error', err.message || `Failed to ${isEditMode ? 'update' : 'add'} recipe`);
+            Alert.alert('Error', err.message || 'Failed to update recipe');
         } finally {
             setSaving(false);
         }
+    }
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#6DA98C" />
+                <CustomText style={styles.loadingText}>Loading recipe...</CustomText>
+            </View>
+        );
     }
 
     return (
@@ -244,20 +160,12 @@ export default function AddRecipeManualScreen() {
                     <CustomText style={styles.logoText}>🍳</CustomText>
                     <View style={{ flex: 1 }} />
                 </View>
-                <CustomText style={styles.headerText}>
-                    {isEditMode ? 'Edit Recipe' : (params.extractedTitle ? 'Edit Extracted Recipe' : 'Create Recipe')}
-                </CustomText>
-                <CustomText style={styles.subHeader}>
-                    {isEditMode ? 'Make changes to your recipe' : (params.extractedTitle ? 'Review and edit the extracted recipe details' : 'Add your own recipe from scratch')}
-                </CustomText>
-                {(params.extractedTitle || isEditMode) && (
-                    <View style={styles.extractedIndicator}>
-                        <Ionicons name={isEditMode ? "create-outline" : "sparkles"} size={16} color="#6DA98C" />
-                        <CustomText style={styles.extractedText}>
-                            {isEditMode ? 'Editing existing recipe' : 'AI extracted from photo'}
-                        </CustomText>
-                    </View>
-                )}
+                <CustomText style={styles.headerText}>Edit Recipe</CustomText>
+                <CustomText style={styles.subHeader}>Make changes to your recipe</CustomText>
+                <View style={styles.extractedIndicator}>
+                    <Ionicons name="create-outline" size={16} color="#6DA98C" />
+                    <CustomText style={styles.extractedText}>Editing existing recipe</CustomText>
+                </View>
             </View>
 
             {/* Content */}
@@ -309,6 +217,8 @@ export default function AddRecipeManualScreen() {
                             />
                         </View>
                     </View>
+                    
+                    {/* Tags */}
                     <View style={styles.tagsContainer}>
                         {tags.map((tag, index) => (
                             <View key={index} style={styles.tagChip}>
@@ -333,17 +243,17 @@ export default function AddRecipeManualScreen() {
                 {/* Ingredients Section */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Ionicons name="nutrition-outline" size={20} color="#6DA98C" />
+                        <Ionicons name="list-outline" size={20} color="#6DA98C" />
                         <CustomText style={styles.sectionTitle}>Ingredients</CustomText>
                     </View>
-                    {ingredients.map((ing, idx) => (
-                        <View key={idx} style={styles.dynamicRow}>
-                            <TextInput
-                                style={[styles.input, styles.dynamicInput]}
-                                placeholder={`Ingredient ${idx + 1}`}
-                                placeholderTextColor="#B0B0B0"
-                                value={ing}
-                                onChangeText={val => updateIngredient(idx, val)}
+                    {ingredients.map((ingredient, idx) => (
+                        <View key={idx} style={styles.inputRow}>
+                            <TextInput 
+                                style={[styles.input, styles.flexInput]} 
+                                placeholder={`Ingredient ${idx + 1}`} 
+                                placeholderTextColor="#B0B0B0" 
+                                value={ingredient} 
+                                onChangeText={(value) => updateIngredient(idx, value)}
                             />
                             {ingredients.length > 1 && (
                                 <TouchableOpacity 
@@ -368,16 +278,16 @@ export default function AddRecipeManualScreen() {
                         <CustomText style={styles.sectionTitle}>Instructions</CustomText>
                     </View>
                     {steps.map((step, idx) => (
-                        <View key={idx} style={styles.dynamicRow}>
+                        <View key={idx} style={styles.inputRow}>
                             <View style={styles.stepNumber}>
                                 <CustomText style={styles.stepNumberText}>{idx + 1}</CustomText>
                             </View>
-                            <TextInput
-                                style={[styles.input, styles.dynamicInput]}
-                                placeholder={`Step ${idx + 1}`}
-                                placeholderTextColor="#B0B0B0"
-                                value={step}
-                                onChangeText={val => updateStep(idx, val)}
+                            <TextInput 
+                                style={[styles.input, styles.flexInput, styles.stepInput]} 
+                                placeholder={`Step ${idx + 1}`} 
+                                placeholderTextColor="#B0B0B0" 
+                                value={step} 
+                                onChangeText={(value) => updateStep(idx, value)}
                                 multiline
                             />
                             {steps.length > 1 && (
@@ -399,16 +309,15 @@ export default function AddRecipeManualScreen() {
                 {/* Save Button */}
                 <TouchableOpacity 
                     style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
-                    onPress={handleSaveRecipe} 
+                    onPress={handleSaveRecipe}
                     disabled={saving}
-                    activeOpacity={0.92}
                 >
                     {saving ? (
-                        <ActivityIndicator color="#fff" size="small" />
+                        <ActivityIndicator size="small" color="#fff" />
                     ) : (
                         <>
                             <Ionicons name="save-outline" size={20} color="#fff" />
-                            <CustomText style={styles.saveButtonText}>Save Recipe</CustomText>
+                            <CustomText style={styles.saveButtonText}>Update Recipe</CustomText>
                         </>
                     )}
                 </TouchableOpacity>
@@ -420,118 +329,159 @@ export default function AddRecipeManualScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
+        backgroundColor: '#fff',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#666',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#fff',
+    },
+    errorText: {
+        fontSize: 18,
+        color: '#EF4444',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    retryButton: {
+        backgroundColor: '#6DA98C',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+    },
+    retryButtonText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#fff',
     },
     header: {
-        backgroundColor: '#F3F0FF',
+        backgroundColor: '#6DA98C',
         paddingTop: 60,
         paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+        paddingHorizontal: 20,
     },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 16,
     },
     backButton: {
-        marginRight: 8,
-        padding: 4,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
     },
     logoText: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#222',
-        letterSpacing: 0.5,
+        fontSize: 24,
+        color: '#fff',
     },
     headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
-        letterSpacing: -0.5,
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
     },
     subHeader: {
         fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
+        color: 'rgba(255, 255, 255, 0.8)',
+        marginBottom: 16,
     },
     extractedIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
-        paddingVertical: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         paddingHorizontal: 12,
-        backgroundColor: '#E0F2FE',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
+        paddingVertical: 6,
+        borderRadius: 16,
+        alignSelf: 'flex-start',
     },
     extractedText: {
-        color: '#6DA98C',
         fontSize: 14,
-        fontWeight: '600',
+        color: '#fff',
         marginLeft: 6,
     },
     scrollView: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
     },
     scrollContent: {
-        paddingBottom: 100,
-        marginTop: 24,
+        padding: 20,
+        paddingBottom: 40,
     },
     section: {
-        marginBottom: 24,
-        paddingHorizontal: 18,
+        marginBottom: 32,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#222',
         marginLeft: 8,
-        letterSpacing: -0.3,
     },
     row: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        gap: 12,
     },
     halfInput: {
-        width: '48%',
+        flex: 1,
     },
     input: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
         paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingVertical: 12,
         fontSize: 16,
         color: '#222',
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
+        backgroundColor: '#F9FAFB',
     },
-    dynamicRow: {
+    inputRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         marginBottom: 12,
+        gap: 12,
     },
-    dynamicInput: {
+    flexInput: {
         flex: 1,
-        marginBottom: 0,
+    },
+    removeButton: {
+        padding: 4,
+    },
+    addButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderWidth: 2,
+        borderColor: '#6DA98C',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        marginTop: 8,
+    },
+    addButtonText: {
+        fontSize: 16,
+        color: '#6DA98C',
+        marginLeft: 8,
+        fontWeight: '500',
     },
     stepNumber: {
         width: 28,
@@ -540,106 +490,65 @@ const styles = StyleSheet.create({
         backgroundColor: '#6DA98C',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
-        marginTop: 2,
-    },
-    stepNumberText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '700',
-    },
-    removeButton: {
-        marginLeft: 8,
-        marginTop: 2,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F0F9FF',
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
         marginTop: 4,
     },
-    addButtonText: {
-        color: '#6DA98C',
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
+    stepNumberText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    stepInput: {
+        minHeight: 60,
+        textAlignVertical: 'top',
+    },
+    tagsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+    },
+    tagChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5E8',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        gap: 6,
+    },
+    tagText: {
+        fontSize: 14,
+        color: '#2D5A4A',
+        fontWeight: '500',
+    },
+    newTagInput: {
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        fontSize: 14,
+        color: '#222',
+        backgroundColor: '#F9FAFB',
+        minWidth: 120,
     },
     saveButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#6DA98C',
-        borderRadius: 16,
         paddingVertical: 16,
-        marginHorizontal: 18,
-        marginTop: 8,
-        shadowColor: '#6DA98C',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        marginTop: 20,
+        gap: 8,
     },
     saveButtonDisabled: {
-        backgroundColor: '#9CA3AF',
+        opacity: 0.6,
     },
     saveButtonText: {
-        color: '#fff',
         fontSize: 18,
-        fontWeight: '700',
-        marginLeft: 8,
-    },
-    tagsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginTop: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        minHeight: 50,
-    },
-    tagChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F0F9FF',
-        borderRadius: 12,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        marginVertical: 2,
-        marginHorizontal: 4,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
-    },
-    tagText: {
-        color: '#6DA98C',
-        fontSize: 14,
         fontWeight: '600',
-        marginRight: 6,
-    },
-    newTagInput: {
-        flex: 1,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        fontSize: 16,
-        color: '#222',
-        borderRadius: 12,
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-        marginVertical: 2,
-        marginHorizontal: 4,
-        minWidth: 120,
+        color: '#fff',
     },
 }); 

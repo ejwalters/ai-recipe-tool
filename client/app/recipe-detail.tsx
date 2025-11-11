@@ -57,6 +57,17 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const [modifiedRecipe, setModifiedRecipe] = useState<any>(null);
   const [showModifiedRecipe, setShowModifiedRecipe] = useState(false);
   const [savingModified, setSavingModified] = useState(false);
+  
+  // Edit modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editServings, setEditServings] = useState('');
+  const [editIngredients, setEditIngredients] = useState(['']);
+  const [editSteps, setEditSteps] = useState(['']);
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editNewTag, setEditNewTag] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -604,21 +615,117 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     setShowModificationSection(false);
   };
 
-  const handleEditRecipe = () => {
-    // Navigate to the edit recipe screen with the current recipe data
-    router.push({
-      pathname: '/add-recipe-manual',
-      params: {
-        editMode: 'true',
-        recipeId: recipe.id,
-        title: recipe.title,
-        time: recipe.time,
-        servings: recipe.servings,
-        ingredients: JSON.stringify(ingredients),
-        steps: JSON.stringify(steps),
-        tags: JSON.stringify(tags)
+  // Edit modal functions
+  const addEditTag = () => {
+    const trimmedTag = editNewTag.trim();
+    if (trimmedTag && !editTags.includes(trimmedTag)) {
+      setEditTags([...editTags, trimmedTag]);
+      setEditNewTag('');
+    }
+  };
+
+  const removeEditTag = (tagToRemove: string) => {
+    setEditTags(editTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const addEditIngredient = () => {
+    setEditIngredients([...editIngredients, '']);
+  };
+
+  const removeEditIngredient = (idx: number) => {
+    if (editIngredients.length > 1) {
+      setEditIngredients(editIngredients.filter((_, i) => i !== idx));
+    }
+  };
+
+  const updateEditIngredient = (idx: number, value: string) => {
+    const newIngredients = [...editIngredients];
+    newIngredients[idx] = value;
+    setEditIngredients(newIngredients);
+  };
+
+  const addEditStep = () => {
+    setEditSteps([...editSteps, '']);
+  };
+
+  const removeEditStep = (idx: number) => {
+    if (editSteps.length > 1) {
+      setEditSteps(editSteps.filter((_, i) => i !== idx));
+    }
+  };
+
+  const updateEditStep = (idx: number, value: string) => {
+    const newSteps = [...editSteps];
+    newSteps[idx] = value;
+    setEditSteps(newSteps);
+  };
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      const user_id = data?.user?.id;
+      if (!user_id) {
+        Alert.alert('Error', 'You must be logged in to save a recipe.');
+        setSavingEdit(false);
+        return;
       }
-    });
+      
+      const ingredientsArr = editIngredients.map(i => i.trim()).filter(Boolean);
+      const stepsArr = editSteps.map(s => s.trim()).filter(Boolean);
+      
+      if (!editTitle || ingredientsArr.length === 0 || stepsArr.length === 0) {
+        Alert.alert('Error', 'Please fill out the recipe name, at least one ingredient, and one step.');
+        setSavingEdit(false);
+        return;
+      }
+      
+      const response = await fetch(`https://familycooksclean.onrender.com/recipes/${recipe.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id,
+          title: editTitle,
+          time: editTime,
+          tags: editTags,
+          ingredients: ingredientsArr,
+          steps: stepsArr,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update recipe');
+      }
+      
+      // Refresh the recipe data to reflect changes
+      const updatedRecipe = await response.json();
+      setRecipe(updatedRecipe);
+      
+      // Close modal and show success message
+      setShowEditModal(false);
+      Alert.alert('Success', 'Recipe updated successfully!');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update recipe');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setShowEditModal(false);
+  };
+
+  const handleEditRecipe = () => {
+    // Open inline edit modal with current recipe data
+    setEditTitle(recipe.title);
+    setEditTime(recipe.time);
+    setEditServings(recipe.servings);
+    setEditIngredients([...ingredients]);
+    setEditSteps([...steps]);
+    setEditTags([...tags]);
+    setEditNewTag('');
+    setShowEditModal(true);
   };
 
   function ensureArray(val: any, fallback: string[]): string[] {
@@ -1155,6 +1262,144 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
               </TouchableOpacity>
             </View>
           </Animated.View>
+        </View>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <CustomText style={styles.editModalTitle}>Edit Recipe</CustomText>
+              <TouchableOpacity onPress={handleCancelEdit} style={styles.editModalCloseButton}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.editModalContent} showsVerticalScrollIndicator={false}>
+              {/* Recipe Name */}
+              <View style={styles.editSection}>
+                <CustomText style={styles.editSectionTitle}>Recipe Name</CustomText>
+                <TextInput 
+                  style={styles.editInput} 
+                  value={editTitle} 
+                  onChangeText={setEditTitle}
+                  placeholder="Recipe name"
+                />
+              </View>
+
+              {/* Basic Info */}
+              <View style={styles.editSection}>
+                <CustomText style={styles.editSectionTitle}>Basic Information</CustomText>
+                <View style={styles.editRow}>
+                  <TextInput 
+                    style={[styles.editInput, styles.editHalfInput]} 
+                    value={editTime} 
+                    onChangeText={setEditTime}
+                    placeholder="Cook time"
+                  />
+                  <TextInput 
+                    style={[styles.editInput, styles.editHalfInput]} 
+                    value={editServings} 
+                    onChangeText={setEditServings}
+                    placeholder="Servings"
+                  />
+                </View>
+                
+                {/* Tags */}
+                <View style={styles.editTagsContainer}>
+                  {editTags.map((tag, index) => (
+                    <View key={index} style={styles.editTagChip}>
+                      <CustomText style={styles.editTagText}>{tag}</CustomText>
+                      <TouchableOpacity onPress={() => removeEditTag(tag)}>
+                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TextInput
+                    style={styles.editNewTagInput}
+                    placeholder="Add tag"
+                    value={editNewTag}
+                    onChangeText={setEditNewTag}
+                    onSubmitEditing={addEditTag}
+                  />
+                </View>
+              </View>
+
+              {/* Ingredients */}
+              <View style={styles.editSection}>
+                <CustomText style={styles.editSectionTitle}>Ingredients</CustomText>
+                {editIngredients.map((ingredient, idx) => (
+                  <View key={idx} style={styles.editInputRow}>
+                    <TextInput 
+                      style={[styles.editInput, styles.editFlexInput]} 
+                      value={ingredient} 
+                      onChangeText={(value) => updateEditIngredient(idx, value)}
+                      placeholder={`Ingredient ${idx + 1}`}
+                    />
+                    {editIngredients.length > 1 && (
+                      <TouchableOpacity onPress={() => removeEditIngredient(idx)}>
+                        <Ionicons name="close-circle" size={24} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.editAddButton} onPress={addEditIngredient}>
+                  <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
+                  <CustomText style={styles.editAddButtonText}>Add Ingredient</CustomText>
+                </TouchableOpacity>
+              </View>
+
+              {/* Steps */}
+              <View style={styles.editSection}>
+                <CustomText style={styles.editSectionTitle}>Instructions</CustomText>
+                {editSteps.map((step, idx) => (
+                  <View key={idx} style={styles.editInputRow}>
+                    <View style={styles.editStepNumber}>
+                      <CustomText style={styles.editStepNumberText}>{idx + 1}</CustomText>
+                    </View>
+                    <TextInput 
+                      style={[styles.editInput, styles.editFlexInput, styles.editStepInput]} 
+                      value={step} 
+                      onChangeText={(value) => updateEditStep(idx, value)}
+                      placeholder={`Step ${idx + 1}`}
+                      multiline
+                    />
+                    {editSteps.length > 1 && (
+                      <TouchableOpacity onPress={() => removeEditStep(idx)}>
+                        <Ionicons name="close-circle" size={24} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.editAddButton} onPress={addEditStep}>
+                  <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
+                  <CustomText style={styles.editAddButtonText}>Add Step</CustomText>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {/* Action Buttons */}
+            <View style={styles.editModalActions}>
+              <TouchableOpacity 
+                style={[styles.editModalButton, styles.editCancelButton]} 
+                onPress={handleCancelEdit}
+              >
+                <CustomText style={styles.editCancelButtonText}>Cancel</CustomText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.editModalButton, styles.editSaveButton, savingEdit && styles.editSaveButtonDisabled]} 
+                onPress={handleSaveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <CustomText style={styles.editSaveButtonText}>Save Changes</CustomText>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -2001,5 +2246,183 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  editModalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    maxHeight: '90%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  editModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2D3748',
+    flex: 1,
+    textAlign: 'center',
+  },
+  editModalCloseButton: {
+    padding: 5,
+  },
+  editModalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingBottom: 30,
+  },
+  editSection: {
+    marginBottom: 20,
+  },
+  editSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 12,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#2D3748',
+    backgroundColor: '#F7FAFC',
+  },
+  editRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  editHalfInput: {
+    flex: 1,
+    marginRight: 10,
+  },
+  editFlexInput: {
+    flex: 1,
+  },
+  editTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  editTagChip: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editTagText: {
+    color: '#4A5568',
+    fontSize: 13,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  editNewTagInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#2D3748',
+    backgroundColor: '#F7FAFC',
+  },
+  editInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  editAddButton: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  editAddButtonText: {
+    color: '#6DA98C',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  editStepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  editStepNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4A5568',
+  },
+  editStepInput: {
+    flex: 1,
+    minHeight: 50,
+  },
+  editModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#fff',
+  },
+  editModalButton: {
+    backgroundColor: '#667EEA',
+    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  editCancelButton: {
+    backgroundColor: '#E53E3E',
+  },
+  editSaveButton: {
+    backgroundColor: '#48BB78',
+  },
+  editSaveButtonDisabled: {
+    backgroundColor: '#A0AEC0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  editCancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  editSaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
