@@ -6,48 +6,115 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
-const CARD_COLORS = ['#CDEFE3', '#E2E2F9', '#FFF7D1', '#D6ECFB'];
-const CARD_ICON_BG = ['#E6F6F0', '#F0F0FB', '#FFFBE7', '#EAF6FE'];
+const PALETTE = {
+    appBackground: '#F4F5FB',
+    chatBackground: '#F7F9FD',
+    header: '#3E8C6D',
+    aiBubble: '#FFFFFF',
+    aiBorder: '#E3E8FF',
+    aiText: '#1F2533',
+    userBubble: '#3E8C6D',
+    userText: '#F5FFF8',
+    timestampMuted: '#8A94A6',
+    inputBackground: '#FFFFFF',
+    inputBorder: '#E1E8F5',
+    inputShadow: 'rgba(62, 140, 109, 0.18)',
+    sendEnabled: '#3E8C6D',
+    sendDisabled: '#E2E8F0',
+};
+
+const CARD_COLORS = ['#E5F3EC', '#E6EEFF', '#FFF1E6', '#EFE5FF'];
+const CARD_ICON_BG = ['#D1E6DA', '#D6E1FF', '#FFE2CD', '#E1D5FF'];
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const TYPING_STEPS = [
+    {
+        icon: 'leaf-outline' as const,
+        label: 'Gathering ingredients',
+    },
+    {
+        icon: 'flame-outline' as const,
+        label: 'Simmering ideas',
+    },
+    {
+        icon: 'restaurant-outline' as const,
+        label: 'Plating your recipe',
+    },
+];
 
 // AI Typing Indicator Component
 const AITypingIndicator = () => {
-    const dot1 = useRef(new Animated.Value(0)).current;
-    const dot2 = useRef(new Animated.Value(0)).current;
-    const dot3 = useRef(new Animated.Value(0)).current;
+    const rotation = useRef(new Animated.Value(0)).current;
+    const fade = useRef(new Animated.Value(1)).current;
+    const [stepIndex, setStepIndex] = useState(0);
 
     useEffect(() => {
-        const animate = () => {
+        const spinAnimation = Animated.loop(
+            Animated.timing(rotation, {
+                toValue: 1,
+                duration: 1600,
+                easing: Easing.linear,
+                useNativeDriver: true,
+            })
+        );
+        spinAnimation.start();
+
+        const interval = setInterval(() => {
             Animated.sequence([
-                Animated.timing(dot1, { toValue: 1, duration: 400, useNativeDriver: true, easing: Easing.linear }),
-                Animated.timing(dot2, { toValue: 1, duration: 400, useNativeDriver: true, easing: Easing.linear }),
-                Animated.timing(dot3, { toValue: 1, duration: 400, useNativeDriver: true, easing: Easing.linear }),
-            ]).start(() => {
-                dot1.setValue(0);
-                dot2.setValue(0);
-                dot3.setValue(0);
-                animate();
-            });
-        };
-        animate();
+                Animated.timing(fade, { toValue: 0.2, duration: 200, useNativeDriver: true }),
+                Animated.timing(fade, { toValue: 1, duration: 240, useNativeDriver: true }),
+            ]).start();
+
+            setStepIndex(prev => (prev + 1) % TYPING_STEPS.length);
+        }, 1400);
+
         return () => {
-            dot1.stopAnimation();
-            dot2.stopAnimation();
-            dot3.stopAnimation();
+            spinAnimation.stop();
+            clearInterval(interval);
         };
-    }, [dot1, dot2, dot3]);
+    }, [rotation, fade]);
+
+    const spin = rotation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg'],
+    });
 
     return (
         <View style={styles.messageRow}>
             <Image source={require('../assets/images/ai-avatar.png')} style={styles.messageAvatar} />
-            <View style={styles.aiBubble}>
-                <View style={styles.typingContainer}>
-                    <View style={styles.typingDots}>
-                        <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
-                        <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
-                        <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+            <View style={styles.typingCard}>
+                <View style={styles.typingHeader}>
+                    <Animated.View style={[styles.typingIconWrapper, { transform: [{ rotate: spin }] }]}>
+                        <Ionicons name="restaurant-outline" size={20} color="#fff" />
+                    </Animated.View>
+                    <CustomText style={styles.typingTitle}>AI Chef is crafting your dish</CustomText>
+                </View>
+                <Animated.View style={{ opacity: fade }}>
+                    <View style={styles.typingStepRow}>
+                        <Ionicons name={TYPING_STEPS[stepIndex].icon} size={16} color="#3B7F6A" style={{ marginRight: 6 }} />
+                        <CustomText style={styles.typingStepText}>{TYPING_STEPS[stepIndex].label}</CustomText>
                     </View>
-                    <CustomText style={styles.typingText}>AI Chef is cooking up something special...</CustomText>
+                </Animated.View>
+                <View style={styles.typingProgressDots}>
+                    {TYPING_STEPS.map((_, idx) => (
+                        <View
+                            key={idx}
+                            style={[
+                                styles.typingProgressDot,
+                                idx === stepIndex && styles.typingProgressDotActive,
+                            ]}
+                        />
+                    ))}
+                </View>
+                <View style={styles.typingRecipeSkeleton}>
+                    <View style={styles.typingSkeletonImage} />
+                    <View style={styles.typingSkeletonTextBlock}>
+                        <View style={styles.typingSkeletonTitle} />
+                        <View style={styles.typingSkeletonMetaRow}>
+                            <View style={styles.typingSkeletonMeta} />
+                            <View style={styles.typingSkeletonMeta} />
+                        </View>
+                    </View>
                 </View>
             </View>
         </View>
@@ -88,7 +155,13 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
 
     return (
         <TouchableOpacity
-            style={[styles.recipeCardModern, { backgroundColor: cardColor, maxWidth: SCREEN_WIDTH * 0.92, alignSelf: 'center' }]} 
+            style={[
+                styles.recipeCardModern,
+                {
+                    backgroundColor: cardColor,
+                    borderColor: `${iconBg}66`,
+                },
+            ]} 
             activeOpacity={0.88}
             onPress={onPress}
         >
@@ -105,7 +178,7 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
                 <CustomText style={styles.recipeTitleModern}>{message.recipe.name}</CustomText>
                 <View style={styles.metaPillWrapperModern}>
                     <View style={styles.metaPillModern}>
-                        <Ionicons name="list-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+                        <Ionicons name="list-outline" size={14} color="#4B5563" style={{ marginRight: 4 }} />
                         <CustomText style={styles.metaPillTextModern}>
                             {Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients
                         </CustomText>
@@ -113,7 +186,7 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
                 </View>
                 <View style={styles.metaPillWrapperModern}>
                     <View style={styles.metaPillModern}>
-                        <Ionicons name="time-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+                        <Ionicons name="time-outline" size={14} color="#4B5563" style={{ marginRight: 4 }} />
                         <CustomText style={styles.metaPillTextModern}>{message.recipe.time || '—'}</CustomText>
                     </View>
                 </View>
@@ -435,12 +508,13 @@ export default function ChatScreen() {
             
             {/* Chat Messages */}
             <View style={styles.chatAreaBg}>
-                <ScrollView 
-                    ref={scrollViewRef}
-                    style={styles.messagesContainer} 
-                    contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 16 }}
-                    showsVerticalScrollIndicator={false}
-                >
+                <View style={styles.chatGradient}>
+                    <ScrollView 
+                        ref={scrollViewRef}
+                        style={styles.messagesContainer} 
+                        contentContainerStyle={styles.messagesContent}
+                        showsVerticalScrollIndicator={false}
+                    >
                     {/* Show welcome message for new chats */}
                     {messages.length === 0 && (
                         <View style={styles.welcomeContainer}>
@@ -528,7 +602,7 @@ export default function ChatScreen() {
                                     )}
                                     <View style={[styles.aiBubble, !isGrouped && styles.aiBubbleTail]}> 
                                         <CustomText style={styles.aiText}>{msg.text}</CustomText>
-                                        <CustomText style={styles.timestamp}>{timestamp}</CustomText>
+                                        <CustomText style={[styles.timestamp, styles.aiTimestamp]}>{timestamp}</CustomText>
                                     </View>
                                 </View>
                             );
@@ -539,7 +613,7 @@ export default function ChatScreen() {
                             <View key={msg.id} style={[styles.messageRow, styles.userRow, !isGrouped && { marginTop: 18 }]}> 
                                 <View style={[styles.userBubble, !isGrouped && styles.userBubbleTail]}>
                                     <CustomText style={styles.userText}>{msg.text}</CustomText>
-                                    <CustomText style={styles.timestamp}>{timestamp}</CustomText>
+                                    <CustomText style={[styles.timestamp, styles.userTimestamp]}>{timestamp}</CustomText>
                                 </View>
                                 {!isGrouped && (
                                     <Image 
@@ -557,6 +631,7 @@ export default function ChatScreen() {
                         );
                     })}
                 </ScrollView>
+            </View>
             </View>
             
             {/* Input Bar */}
@@ -576,8 +651,9 @@ export default function ChatScreen() {
                             style={[styles.sendButton, (!message.trim() || sending) && styles.sendButtonDisabled]}
                             onPress={sendMessage}
                             disabled={!message.trim() || sending}
+                            activeOpacity={0.85}
                         >
-                            <Ionicons name="send" size={18} color={message.trim() ? "#fff" : "#DDD"} />
+                            <Ionicons name="send" size={18} color={message.trim() ? '#FFFFFF' : '#94A3B8'} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -589,7 +665,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
     outerContainer: { 
         flex: 1, 
-        backgroundColor: '#F3F0FF' 
+        backgroundColor: PALETTE.appBackground, 
     },
     loadingContainer: {
         flex: 1,
@@ -608,7 +684,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: HEADER_HEIGHT,
-        backgroundColor: '#6DA98C',
+        backgroundColor: PALETTE.header,
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
         flexDirection: 'row',
@@ -640,7 +716,7 @@ const styles = StyleSheet.create({
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#fff',
+        backgroundColor: '#D9FBE8',
         marginRight: 6,
     },
     headerStatusText: {
@@ -655,7 +731,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
@@ -667,15 +743,24 @@ const styles = StyleSheet.create({
     },
     chatAreaBg: {
         flex: 1,
-        backgroundColor: '#F3F0FF',
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         marginTop: HEADER_HEIGHT,
-        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: PALETTE.chatBackground,
+    },
+    chatGradient: {
+        flex: 1,
+        paddingTop: 24,
+        backgroundColor: PALETTE.chatBackground,
     },
     messagesContainer: {
         flex: 1,
-        paddingTop: 16,
+    },
+    messagesContent: {
+        paddingBottom: 140,
+        paddingHorizontal: 20,
+        paddingTop: 4,
     },
     messageRow: {
         flexDirection: 'row',
@@ -694,31 +779,35 @@ const styles = StyleSheet.create({
         height: 36,
         borderRadius: 18,
         marginHorizontal: 8,
-        backgroundColor: '#D1E7DD',
+        backgroundColor: '#D9F1E5',
     },
     aiBubble: {
-        backgroundColor: '#fff',
+        backgroundColor: PALETTE.aiBubble,
         borderRadius: 22,
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         marginHorizontal: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
-        shadowRadius: 10,
-        elevation: 3,
-        maxWidth: SCREEN_WIDTH * 0.75,
+        shadowColor: 'rgba(26, 35, 52, 0.12)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 4,
+        maxWidth: SCREEN_WIDTH * 0.82,
+        borderWidth: 1,
+        borderColor: PALETTE.aiBorder,
     },
     userBubble: {
-        backgroundColor: '#B6E2D3',
+        backgroundColor: PALETTE.userBubble,
         borderRadius: 22,
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         marginHorizontal: 8,
-        shadowColor: '#B6E2D3',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
-        shadowRadius: 10,
-        elevation: 3,
-        maxWidth: SCREEN_WIDTH * 0.75,
+        shadowColor: 'rgba(62, 140, 109, 0.32)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        elevation: 4,
+        maxWidth: SCREEN_WIDTH * 0.82,
     },
     aiBubbleTail: {
         borderBottomLeftRadius: 0,
@@ -727,73 +816,79 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: 0,
     },
     aiText: {
-        color: '#222',
+        color: PALETTE.aiText,
         fontSize: 16,
         fontWeight: '500',
-        lineHeight: 22,
+        lineHeight: 23,
         letterSpacing: -0.1,
     },
     userText: {
-        color: '#222',
+        color: PALETTE.userText,
         fontSize: 16,
-        fontWeight: '500',
-        lineHeight: 22,
+        fontWeight: '600',
+        lineHeight: 23,
         letterSpacing: -0.1,
     },
     timestamp: {
         fontSize: 12,
-        color: '#B0B0B0',
         marginTop: 8,
         textAlign: 'right',
     },
+    aiTimestamp: {
+        color: PALETTE.timestampMuted,
+    },
+    userTimestamp: {
+        color: 'rgba(243, 255, 248, 0.7)',
+    },
     safeAreaInput: {
-        backgroundColor: '#F3F0FF',
+        backgroundColor: PALETTE.chatBackground,
     },
     inputContainer: {
         backgroundColor: 'transparent',
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         paddingBottom: 20,
         paddingTop: 0,
     },
     inputBox: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        backgroundColor: '#fff',
-        borderRadius: 32,
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        borderWidth: 0,
-        shadowColor: '#6DA98C',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 18,
-        elevation: 10,
+        backgroundColor: PALETTE.inputBackground,
+        borderRadius: 24,
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        shadowColor: PALETTE.inputShadow,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.16,
+        shadowRadius: 20,
+        elevation: 8,
+        borderWidth: 1,
+        borderColor: PALETTE.inputBorder,
     },
     textInput: {
         flex: 1,
         fontSize: 16,
-        color: '#222',
+        color: '#1F2533',
         maxHeight: 120,
-        paddingVertical: 4,
+        paddingVertical: 6,
         lineHeight: 20,
         fontWeight: '500',
     },
     sendButton: {
-        backgroundColor: '#6DA98C',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        backgroundColor: PALETTE.sendEnabled,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 12,
-        shadowColor: '#6DA98C',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowColor: 'rgba(62, 140, 109, 0.35)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28,
+        shadowRadius: 8,
+        elevation: 6,
     },
     sendButtonDisabled: {
-        backgroundColor: '#F7F7F7',
+        backgroundColor: PALETTE.sendDisabled,
         shadowOpacity: 0,
         elevation: 0,
     },
@@ -801,21 +896,21 @@ const styles = StyleSheet.create({
     recipeCardModern: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 22,
-        paddingVertical: 16,
-        paddingHorizontal: 12,
-        marginBottom: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 2,
+        borderRadius: 24,
+        paddingVertical: 18,
+        paddingHorizontal: 16,
+        marginBottom: 12,
+        shadowColor: 'rgba(15, 23, 42, 0.08)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.16,
+        shadowRadius: 14,
+        elevation: 4,
         position: 'relative',
         marginTop: 4,
         minHeight: 12,
-        maxWidth: SCREEN_WIDTH * 0.5,
-        alignSelf: 'center',
-        marginHorizontal: 4,
+        maxWidth: SCREEN_WIDTH * 0.78,
+        marginHorizontal: 8,
+        borderWidth: 1,
     },
     recipeCardLeftModern: {
         alignItems: 'center',
@@ -823,34 +918,39 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     cardImageWrapperModern: {
-        width: 56,
-        height: 56,
-        borderRadius: 16,
+        width: 62,
+        height: 62,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 0,
+        shadowColor: 'rgba(15, 23, 42, 0.12)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        elevation: 4,
     },
     cardImageModern: {
-        width: 56,
-        height: 56,
-        borderRadius: 16,
+        width: 62,
+        height: 62,
+        borderRadius: 20,
         resizeMode: 'cover',
     },
     recipeCardRightModern: {
         flex: 1,
         justifyContent: 'center',
         minWidth: 0,
-        maxWidth: '65%',
+        paddingRight: 4,
     },
     recipeTitleModern: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
+        fontWeight: '800',
+        color: '#1F2533',
         textAlign: 'left',
-        marginBottom: 8,
-        minHeight: 24,
+        marginBottom: 10,
         flexShrink: 1,
         maxWidth: '100%',
+        letterSpacing: -0.2,
     },
     metaPillWrapperModern: {
         width: '100%',
@@ -861,40 +961,121 @@ const styles = StyleSheet.create({
     metaPillModern: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.7)',
-        borderRadius: 12,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        backgroundColor: 'rgba(255,255,255,0.75)',
+        borderRadius: 14,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
         marginHorizontal: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(148, 163, 184, 0.18)',
     },
     metaPillTextModern: {
         fontSize: 13,
-        color: '#6B7280',
-        fontWeight: '600',
+        color: '#4B5563',
+        fontWeight: '700',
     },
     // Typing indicator styles
-    typingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        minHeight: 36,
+    typingCard: {
+        backgroundColor: 'rgba(255,255,255,0.96)',
+        borderRadius: 24,
+        padding: 18,
+        marginHorizontal: 8,
+        shadowColor: 'rgba(26, 35, 52, 0.18)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 12,
+        elevation: 4,
+        maxWidth: SCREEN_WIDTH * 0.82,
+        borderWidth: 1,
+        borderColor: 'rgba(219, 228, 247, 0.9)',
     },
-    typingDots: {
+    typingHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 12,
+    },
+    typingIconWrapper: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: PALETTE.header,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginRight: 12,
+        shadowColor: 'rgba(62,140,109,0.4)',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.28,
+        shadowRadius: 8,
+        elevation: 3,
     },
-    typingDot: {
+    typingTitle: {
+        color: '#1F2937',
+        fontSize: 15,
+        fontWeight: '700',
+        flexShrink: 1,
+    },
+    typingStepRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    typingStepText: {
+        color: '#336955',
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 0.1,
+    },
+    typingProgressDots: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    typingProgressDot: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#8CBEC7',
-        marginHorizontal: 2,
+        backgroundColor: '#E2F6EB',
+        marginRight: 6,
     },
-    typingText: {
-        color: '#6C757D',
-        fontSize: 15,
-        fontStyle: 'italic',
+    typingProgressDotActive: {
+        backgroundColor: PALETTE.header,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+    typingRecipeSkeleton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(236, 241, 248, 0.75)',
+        borderRadius: 18,
+        padding: 12,
+    },
+    typingSkeletonImage: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: 'rgba(207, 217, 229, 0.6)',
+        marginRight: 12,
+    },
+    typingSkeletonTextBlock: {
         flex: 1,
+    },
+    typingSkeletonTitle: {
+        height: 14,
+        borderRadius: 8,
+        backgroundColor: 'rgba(201, 212, 227, 0.72)',
+        marginBottom: 10,
+        width: '70%',
+    },
+    typingSkeletonMetaRow: {
+        flexDirection: 'row',
+    },
+    typingSkeletonMeta: {
+        height: 10,
+        borderRadius: 6,
+        backgroundColor: 'rgba(220, 228, 240, 0.85)',
+        marginRight: 8,
+        flex: 0.3,
     },
     // Welcome message styles
     welcomeContainer: {
@@ -908,29 +1089,29 @@ const styles = StyleSheet.create({
         height: 36,
         borderRadius: 18,
         marginRight: 12,
-        backgroundColor: '#D1E7DD',
+        backgroundColor: '#D9F1E5',
     },
     welcomeBubble: {
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         borderRadius: 22,
         padding: 20,
         flex: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.07,
-        shadowRadius: 10,
-        elevation: 3,
+        shadowColor: 'rgba(15, 23, 42, 0.08)',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 4,
         maxWidth: SCREEN_WIDTH * 0.85,
     },
     welcomeTitle: {
-        color: '#222',
+        color: '#1F2533',
         fontSize: 18,
         fontWeight: '700',
         marginBottom: 12,
         lineHeight: 24,
     },
     welcomeText: {
-        color: '#666',
+        color: '#536072',
         fontSize: 15,
         lineHeight: 22,
         marginBottom: 12,
@@ -939,7 +1120,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     welcomeListItem: {
-        color: '#666',
+        color: '#536072',
         fontSize: 14,
         lineHeight: 20,
         marginBottom: 6,

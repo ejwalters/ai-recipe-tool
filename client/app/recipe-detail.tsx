@@ -23,6 +23,90 @@ import { Heart, HeartIcon, Book, BookIcon } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+const MODIFICATION_STEPS = [
+  { icon: 'leaf-outline' as const, label: 'Reviewing your request' },
+  { icon: 'flame-outline' as const, label: 'Adjusting flavors' },
+  { icon: 'restaurant-outline' as const, label: 'Plating new ideas' },
+];
+
+const ModificationLoadingIndicator = () => {
+  const rotation = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    const spinLoop = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    spinLoop.start();
+
+    const intervalId = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(fade, { toValue: 0.3, duration: 180, useNativeDriver: true }),
+        Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start();
+
+      setStepIndex(prev => (prev + 1) % MODIFICATION_STEPS.length);
+    }, 1400);
+
+    return () => {
+      spinLoop.stop();
+      clearInterval(intervalId);
+    };
+  }, [rotation, fade]);
+
+  const spin = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={styles.modLoadingCard}>
+      <View style={styles.modLoadingHeader}>
+        <Animated.View style={[styles.modLoadingIcon, { transform: [{ rotate: spin }] }]}>
+          <Ionicons name="sparkles-outline" size={18} color="#fff" />
+        </Animated.View>
+        <CustomText style={styles.modLoadingTitle}>Crafting your modifications</CustomText>
+      </View>
+
+      <Animated.View style={{ opacity: fade }}>
+        <View style={styles.modLoadingStepRow}>
+          <Ionicons name={MODIFICATION_STEPS[stepIndex].icon} size={16} color="#3B7F6A" style={{ marginRight: 6 }} />
+          <CustomText style={styles.modLoadingStepText}>{MODIFICATION_STEPS[stepIndex].label}</CustomText>
+        </View>
+      </Animated.View>
+
+      <View style={styles.modLoadingProgressRow}>
+        {MODIFICATION_STEPS.map((_, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.modLoadingDot,
+              idx === stepIndex && styles.modLoadingDotActive,
+            ]}
+          />
+        ))}
+      </View>
+
+      <View style={styles.modLoadingSkeleton}>
+        <View style={styles.modLoadingSkeletonIcon} />
+        <View style={styles.modLoadingSkeletonTextBlock}>
+          <View style={styles.modLoadingSkeletonTitle} />
+          <View style={styles.modLoadingSkeletonLines}>
+            <View style={styles.modLoadingSkeletonLine} />
+            <View style={[styles.modLoadingSkeletonLine, { width: '55%' }]} />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
 interface RecipeDetailV2Props {
   recipes?: any[];
   router?: any;
@@ -1092,7 +1176,10 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                 activeOpacity={0.8}
               >
                 {isModifying ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <>
+                    <Ionicons name="sparkles" size={16} color="#fff" style={{ marginRight: 8 }} />
+                    <CustomText style={styles.submitButtonText}>Generating...</CustomText>
+                  </>
                 ) : (
                   <>
                     <Ionicons name="sparkles" size={16} color="#fff" />
@@ -1100,6 +1187,10 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                   </>
                 )}
               </TouchableOpacity>
+
+              {isModifying && (
+                <ModificationLoadingIndicator />
+              )}
             </View>
           </Animated.View>
         </View>
@@ -1876,6 +1967,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  modLoadingCard: {
+    marginTop: 18,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E1E8F5',
+    shadowColor: 'rgba(46, 64, 87, 0.16)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  modLoadingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modLoadingIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#667EEA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: 'rgba(102, 126, 234, 0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.26,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  modLoadingTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2D3748',
+    flexShrink: 1,
+  },
+  modLoadingStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modLoadingStepText: {
+    color: '#3B518A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modLoadingProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modLoadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E3E8FF',
+    marginRight: 6,
+  },
+  modLoadingDotActive: {
+    backgroundColor: '#667EEA',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  modLoadingSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(236, 240, 255, 0.6)',
+    borderRadius: 16,
+    padding: 12,
+  },
+  modLoadingSkeletonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(209, 218, 255, 0.8)',
+    marginRight: 12,
+  },
+  modLoadingSkeletonTextBlock: {
+    flex: 1,
+  },
+  modLoadingSkeletonTitle: {
+    height: 14,
+    borderRadius: 8,
+    backgroundColor: 'rgba(199, 208, 240, 0.8)',
+    marginBottom: 10,
+    width: '72%',
+  },
+  modLoadingSkeletonLines: {
+    width: '100%',
+  },
+  modLoadingSkeletonLine: {
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: 'rgba(219, 227, 255, 0.85)',
+    width: '85%',
+    marginBottom: 6,
   },
   modifiedRecipeContainer: {
     backgroundColor: '#fff',
