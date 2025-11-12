@@ -17,22 +17,63 @@ import { supabase } from '../../../lib/supabase';
 
 const SignUpScreen = () => {
     const [fullName, setFullName] = useState('');
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const router = useRouter();
 
     const handleCreateAccount = async () => {
+        const trimmedName = fullName.trim();
+        const trimmedUsername = username.trim();
+        const trimmedEmail = email.trim();
+
+        if (!trimmedName || !trimmedUsername || !trimmedEmail || !password) {
+            Alert.alert('Missing Information', 'Please fill in all fields to continue.');
+            return;
+        }
+
+        const usernamePattern = /^[a-z0-9_]+$/i;
+        if (!usernamePattern.test(trimmedUsername)) {
+            Alert.alert(
+                'Invalid Username',
+                'Usernames can only include letters, numbers, and underscores.'
+            );
+            return;
+        }
+
+        const normalizedUsername = trimmedUsername.toLowerCase();
+
+        const { count: existingUsernameCount, error: usernameCheckError } = await supabase
+            .from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('username', normalizedUsername);
+
+        if (usernameCheckError) {
+            Alert.alert('Sign Up Failed', 'Unable to verify username availability. Please try again.');
+            console.error('[auth.signUp] username availability check failed', usernameCheckError);
+            return;
+        }
+
+        if ((existingUsernameCount ?? 0) > 0) {
+            Alert.alert('Username Unavailable', 'That username is already taken. Please choose another.');
+            return;
+        }
+
         const { error } = await supabase.auth.signUp({ 
-            email, 
+            email: trimmedEmail, 
             password,
             options: {
                 data: {
-                    full_name: fullName
+                    full_name: trimmedName,
+                    name: trimmedName,
+                    display_name: trimmedName,
+                    username: normalizedUsername,
                 }
             }
         });
         if (error) {
             Alert.alert('Sign Up Failed', error.message);
+            console.error('[auth.signUp] failed', error);
         } else {
             router.replace('/(tabs)');
         }
@@ -71,6 +112,15 @@ const SignUpScreen = () => {
                             value={fullName}
                             onChangeText={setFullName}
                             autoCapitalize="words"
+                            autoCorrect={false}
+                        />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Username"
+                            placeholderTextColor="#666"
+                            value={username}
+                            onChangeText={setUsername}
+                            autoCapitalize="none"
                             autoCorrect={false}
                         />
                         <TextInput
