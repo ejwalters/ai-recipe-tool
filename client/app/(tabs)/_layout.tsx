@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
-import { Home, HomeIcon, Book, BookIcon, ChefHat, ChefHatIcon, Heart, HeartIcon, User, UserIcon } from 'lucide-react-native';
+import { Home, HomeIcon, Book, BookIcon, ChefHat, ChefHatIcon, User, UserIcon, Users, UsersIcon } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -36,12 +36,12 @@ export default function TabLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
-        name="recipes"
+        name="social"
         options={{
-          tabBarIcon: ({ focused }) => (
-            focused ? <BookIcon color="#6DA98C" size={28} /> : <Book color="#B0B0B0" size={28} />
-          ),
+          tabBarIcon: ({ focused }) =>
+            focused ? <UsersIcon color="#6DA98C" size={28} /> : <Users color="#B0B0B0" size={28} />,
         }}
       />
       <Tabs.Screen
@@ -72,10 +72,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="favorites"
+        name="recipes"
         options={{
           tabBarIcon: ({ focused }) => (
-            focused ? <HeartIcon color="#6DA98C" size={28} /> : <Heart color="#B0B0B0" size={28} />
+            focused ? <BookIcon color="#6DA98C" size={28} /> : <Book color="#B0B0B0" size={28} />
           ),
         }}
       />
