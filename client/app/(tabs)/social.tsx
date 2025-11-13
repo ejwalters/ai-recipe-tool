@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -45,6 +46,50 @@ const SEGMENTS: Array<{ id: 'feed' | 'discover'; label: string }> = [
   { id: 'feed', label: 'Feed' },
   { id: 'discover', label: 'Discover' },
 ];
+
+// Avatar component with fallback
+const UserAvatar = ({
+  avatarUrl,
+  size = 48,
+  style,
+}: {
+  avatarUrl?: string | null;
+  size?: number;
+  style?: any;
+}) => {
+  const [imageError, setImageError] = React.useState(false);
+  
+  // Reset error state when avatarUrl changes
+  React.useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
+  
+  const avatarStyle = {
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2.5,
+    borderColor: '#D1FAE5',
+    overflow: 'hidden' as const,
+  };
+
+  if (avatarUrl && !imageError) {
+    return (
+      <Image
+        source={{ uri: avatarUrl }}
+        style={[avatarStyle, style]}
+        onError={() => setImageError(true)}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[avatarStyle, { alignItems: 'center', justifyContent: 'center' }, style]}>
+      <Ionicons name="person" size={size * 0.55} color="#4F9E7A" />
+    </View>
+  );
+};
 
 export default function SocialScreen() {
   const router = useRouter();
@@ -170,8 +215,8 @@ export default function SocialScreen() {
         >
           <View style={styles.cardHeader}>
             <View style={styles.authorBadge}>
-              <Ionicons name="person-circle-outline" size={32} color="#4F9E7A" />
-              <View style={{ marginLeft: 10 }}>
+              <UserAvatar avatarUrl={item.author?.avatar_url} size={40} />
+              <View style={styles.authorInfo}>
                 <CustomText style={styles.authorName}>
                   {item.author?.display_name || item.author?.username || 'Unknown Chef'}
                 </CustomText>
@@ -226,8 +271,8 @@ export default function SocialScreen() {
       return (
         <View style={styles.userRow}>
           <View style={styles.userInfo}>
-            <Ionicons name="person-circle-outline" size={40} color="#4F9E7A" />
-            <View style={{ marginLeft: 12 }}>
+            <UserAvatar avatarUrl={item.avatar_url} size={56} />
+            <View style={styles.userDetails}>
               <CustomText style={styles.userName}>
                 {item.display_name || item.username || 'New Chef'}
               </CustomText>
@@ -239,7 +284,12 @@ export default function SocialScreen() {
             onPress={() => handleFollowToggle(item)}
             activeOpacity={0.85}
           >
-            <CustomText style={styles.followButtonText}>
+            <CustomText
+              style={[
+                styles.followButtonText,
+                item.is_following && styles.followButtonTextActive,
+              ]}
+            >
               {item.is_following ? 'Following' : 'Follow'}
             </CustomText>
           </TouchableOpacity>
@@ -420,14 +470,16 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 24,
+    padding: 20,
     marginBottom: 14,
     shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -438,15 +490,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  authorInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
   authorName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
+    marginBottom: 2,
   },
   authorHandle: {
     fontSize: 13,
     color: '#64748B',
-    marginTop: 2,
   },
   cardTimestamp: {
     fontSize: 12,
@@ -480,22 +536,25 @@ const styles = StyleSheet.create({
   },
   discoverContainer: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    height: 48,
-    gap: 10,
-    shadowColor: 'rgba(0,0,0,0.05)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    height: 52,
+    gap: 12,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+    marginBottom: 4,
   },
   searchInput: {
     flex: 1,
@@ -507,44 +566,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 24,
     marginBottom: 12,
-    shadowColor: 'rgba(15,23,42,0.06)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 1,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 16,
+  },
+  userDetails: {
+    marginLeft: 16,
+    flex: 1,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1E293B',
+    marginBottom: 6,
+    letterSpacing: -0.3,
+    lineHeight: 24,
   },
   userHandle: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#64748B',
-    marginTop: 2,
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
   followButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingHorizontal: 24,
+    paddingVertical: 11,
+    borderRadius: 20,
     backgroundColor: '#4F9E7A',
+    shadowColor: 'rgba(79, 158, 122, 0.25)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
   },
   followButtonActive: {
-    backgroundColor: '#E2F9EE',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#4F9E7A',
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   followButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  followButtonTextActive: {
+    color: '#2F855A',
+    fontWeight: '700',
   },
   emptyState: {
     alignItems: 'center',

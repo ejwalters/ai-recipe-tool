@@ -35,17 +35,50 @@ router.get('/search', async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, display_name, username, avatar_url')
-      .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
-      .neq('id', req.user.id)
-      .order('display_name', { ascending: true })
-      .limit(25);
+    // Query both username and display_name separately, then combine unique results
+    // This is more reliable than using .or() with ILIKE in PostgREST
+    const searchPattern = `%${query}%`;
+    
+    const [usernameResults, displayNameResults] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, display_name, username, avatar_url')
+        .ilike('username', searchPattern)
+        .neq('id', req.user.id)
+        .limit(25),
+      supabase
+        .from('profiles')
+        .select('id, display_name, username, avatar_url')
+        .ilike('display_name', searchPattern)
+        .neq('id', req.user.id)
+        .limit(25),
+    ]);
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
+    if (usernameResults.error) {
+      console.error('[social/search] Username search error:', usernameResults.error);
+      return res.status(500).json({ error: usernameResults.error.message });
     }
+
+    if (displayNameResults.error) {
+      console.error('[social/search] Display name search error:', displayNameResults.error);
+      return res.status(500).json({ error: displayNameResults.error.message });
+    }
+
+    // Combine results and remove duplicates
+    const allResults = [...(usernameResults.data || []), ...(displayNameResults.data || [])];
+    const uniqueMap = new Map();
+    allResults.forEach(profile => {
+      if (!uniqueMap.has(profile.id)) {
+        uniqueMap.set(profile.id, profile);
+      }
+    });
+    const data = Array.from(uniqueMap.values())
+      .sort((a, b) => {
+        const aName = (a.display_name || a.username || '').toLowerCase();
+        const bName = (b.display_name || b.username || '').toLowerCase();
+        return aName.localeCompare(bName);
+      })
+      .slice(0, 25);
 
     // Mark which of these users are already followed
     const targetIds = data.map(profile => profile.id);
