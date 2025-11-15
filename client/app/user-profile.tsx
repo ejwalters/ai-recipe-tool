@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   FlatList,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -76,6 +77,123 @@ const UserAvatar = ({
     <View style={[avatarStyle, { alignItems: 'center', justifyContent: 'center' }]}>
       <Ionicons name="person" size={size * 0.55} color="#4F9E7A" />
     </View>
+  );
+};
+
+// Profile Loading Skeleton Component
+const ProfileLoadingSkeleton = () => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Pulsing animation for avatar
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Shimmer animation for skeleton lines
+    const shimmerLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    shimmerLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+      shimmerLoop.stop();
+    };
+  }, []);
+
+  const shimmerOpacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} disabled>
+          <Ionicons name="arrow-back" size={24} color="#1E293B" />
+        </TouchableOpacity>
+        <CustomText style={styles.headerTitle}>Profile</CustomText>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Profile Header Skeleton */}
+        <View style={styles.profileHeader}>
+          <Animated.View style={[styles.skeletonAvatar, { transform: [{ scale: pulseAnim }] }]}>
+            <Ionicons name="person" size={48} color="#CBD5F5" />
+          </Animated.View>
+          <View style={styles.profileInfo}>
+            <Animated.View style={[styles.skeletonLine, styles.skeletonName, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, styles.skeletonHandle, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, styles.skeletonBio, { opacity: shimmerOpacity }]} />
+          </View>
+        </View>
+
+        {/* Stats Row Skeleton */}
+        <View style={styles.statsRow}>
+          {[1, 2, 3].map((i) => (
+            <React.Fragment key={i}>
+              <View style={styles.statItem}>
+                <Animated.View style={[styles.skeletonLine, styles.skeletonStatValue, { opacity: shimmerOpacity }]} />
+                <Animated.View style={[styles.skeletonLine, styles.skeletonStatLabel, { opacity: shimmerOpacity }]} />
+              </View>
+              {i < 3 && <View style={styles.statDivider} />}
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* Follow Button Skeleton */}
+        <Animated.View style={[styles.skeletonFollowButton, { opacity: shimmerOpacity }]} />
+
+        {/* Tabs Skeleton */}
+        <View style={styles.tabsContainer}>
+          <Animated.View style={[styles.skeletonTab, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonTab, { opacity: shimmerOpacity }]} />
+        </View>
+
+        {/* Recipe Cards Skeleton */}
+        <View style={styles.listContent}>
+          {[1, 2, 3].map((i) => (
+            <Animated.View key={i} style={[styles.skeletonRecipeCard, { opacity: shimmerOpacity }]}>
+              <View style={styles.skeletonRecipeHeader}>
+                <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeTitle, { opacity: shimmerOpacity }]} />
+              </View>
+              <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeMeta, { opacity: shimmerOpacity }]} />
+              <View style={styles.skeletonTagsRow}>
+                <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+                <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+              </View>
+            </Animated.View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -219,20 +337,7 @@ export default function UserProfileScreen() {
   );
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1E293B" />
-          </TouchableOpacity>
-          <CustomText style={styles.headerTitle}>Profile</CustomText>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4F9E7A" />
-        </View>
-      </SafeAreaView>
-    );
+    return <ProfileLoadingSkeleton />;
   }
 
   if (!profile) {
@@ -603,6 +708,96 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748B',
     fontWeight: '500',
+  },
+  // Loading Skeleton Styles
+  skeletonAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#E2F9EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#D1FAE5',
+  },
+  skeletonLine: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+  },
+  skeletonName: {
+    width: 180,
+    height: 24,
+    marginBottom: 8,
+    borderRadius: 6,
+  },
+  skeletonHandle: {
+    width: 120,
+    height: 16,
+    marginBottom: 12,
+    borderRadius: 4,
+  },
+  skeletonBio: {
+    width: 280,
+    height: 16,
+    borderRadius: 4,
+  },
+  skeletonStatValue: {
+    width: 30,
+    height: 22,
+    marginBottom: 6,
+    borderRadius: 4,
+  },
+  skeletonStatLabel: {
+    width: 60,
+    height: 13,
+    borderRadius: 4,
+  },
+  skeletonFollowButton: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    height: 48,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonTab: {
+    flex: 1,
+    height: 40,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonRecipeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+  },
+  skeletonRecipeHeader: {
+    marginBottom: 12,
+  },
+  skeletonRecipeTitle: {
+    width: '80%',
+    height: 20,
+    marginBottom: 8,
+    borderRadius: 4,
+  },
+  skeletonRecipeMeta: {
+    width: 100,
+    height: 14,
+    marginBottom: 12,
+    borderRadius: 4,
+  },
+  skeletonTagsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  skeletonTag: {
+    width: 70,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
   },
 });
 
