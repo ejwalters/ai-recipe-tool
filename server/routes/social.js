@@ -314,6 +314,160 @@ router.get('/feed', async (req, res) => {
   }
 });
 
+// GET /social/profile/:user_id
+router.get('/profile/:user_id', async (req, res) => {
+  const targetUserId = req.params.user_id;
+
+  try {
+    // Get profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, display_name, username, avatar_url, bio')
+      .eq('id', targetUserId)
+      .single();
+
+    if (profileError || !profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    // Get follower count
+    const { count: followersCount, error: followersError } = await supabase
+      .from('social_follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('followee_id', targetUserId);
+
+    // Get following count
+    const { count: followingCount, error: followingError } = await supabase
+      .from('social_follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('follower_id', targetUserId);
+
+    // Get recipes count
+    const { count: recipesCount, error: recipesError } = await supabase
+      .from('recipes')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', targetUserId);
+
+    // Check if current user is following
+    let isFollowing = false;
+    if (req.user.id !== targetUserId) {
+      const { data: followCheck } = await supabase
+        .from('social_follows')
+        .select('followee_id')
+        .eq('follower_id', req.user.id)
+        .eq('followee_id', targetUserId)
+        .single();
+      isFollowing = !!followCheck;
+    }
+
+    res.json({
+      ...profile,
+      followers_count: followersCount || 0,
+      following_count: followingCount || 0,
+      recipes_count: recipesCount || 0,
+      is_following: isFollowing,
+    });
+  } catch (error) {
+    console.error('[social/profile] Error:', error);
+    res.status(500).json({ error: 'Failed to load profile' });
+  }
+});
+
+// GET /social/profile/:user_id/recipes
+router.get('/profile/:user_id/recipes', async (req, res) => {
+  const targetUserId = req.params.user_id;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+
+  try {
+    // Get all recipes for now (later can filter by is_public)
+    const { data: recipes, error: recipesError } = await supabase
+      .from('recipes')
+      .select('id, title, time, tags, created_at')
+      .eq('user_id', targetUserId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (recipesError) {
+      return res.status(500).json({ error: recipesError.message });
+    }
+
+    // Mark which recipes are favorited by current user
+    if (recipes && recipes.length > 0) {
+      const recipeIds = recipes.map(r => r.id);
+      const { data: favorites } = await supabase
+        .from('favorites')
+        .select('recipe_id')
+        .eq('user_id', req.user.id)
+        .in('recipe_id', recipeIds);
+
+      const favoritedIds = new Set((favorites || []).map(f => f.recipe_id));
+      recipes.forEach(recipe => {
+        recipe.is_favorited = favoritedIds.has(recipe.id);
+      });
+    }
+
+    res.json(recipes || []);
+  } catch (error) {
+    console.error('[social/profile/recipes] Error:', error);
+    res.status(500).json({ error: 'Failed to load recipes' });
+  }
+});
+
+// GET /social/profile/:user_id/favorites
+router.get('/profile/:user_id/favorites', async (req, res) => {
+  const targetUserId = req.params.user_id;
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+
+  try {
+    // Get favorited recipe IDs for this user
+    const { data: favorites, error: favoritesError } = await supabase
+      .from('favorites')
+      .select('recipe_id')
+      .eq('user_id', targetUserId)
+      .limit(limit);
+
+    if (favoritesError) {
+      return res.status(500).json({ error: favoritesError.message });
+    }
+
+    if (!favorites || favorites.length === 0) {
+      return res.json([]);
+    }
+
+    const recipeIds = favorites.map(f => f.recipe_id);
+
+    // Get the actual recipes
+    const { data: recipes, error: recipesError } = await supabase
+      .from('recipes')
+      .select('id, title, time, tags, created_at')
+      .in('id', recipeIds)
+      .order('created_at', { ascending: false });
+
+    if (recipesError) {
+      return res.status(500).json({ error: recipesError.message });
+    }
+
+    // Mark which recipes are favorited by current user
+    if (recipes && recipes.length > 0) {
+      const { data: currentUserFavorites } = await supabase
+        .from('favorites')
+        .select('recipe_id')
+        .eq('user_id', req.user.id)
+        .in('recipe_id', recipeIds);
+
+      const favoritedIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
+      recipes.forEach(recipe => {
+        recipe.is_favorited = favoritedIds.has(recipe.id);
+      });
+    }
+
+    res.json(recipes || []);
+  } catch (error) {
+    console.error('[social/profile/favorites] Error:', error);
+    res.status(500).json({ error: 'Failed to load favorites' });
+  }
+});
+
 module.exports = router;
 
 

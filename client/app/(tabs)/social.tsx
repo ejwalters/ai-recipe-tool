@@ -214,7 +214,16 @@ export default function SocialScreen() {
           onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
         >
           <View style={styles.cardHeader}>
-            <View style={styles.authorBadge}>
+            <TouchableOpacity
+              style={styles.authorBadge}
+              activeOpacity={0.85}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.author?.id) {
+                  router.push({ pathname: '/user-profile', params: { user_id: item.author.id } });
+                }
+              }}
+            >
               <UserAvatar avatarUrl={item.author?.avatar_url} size={40} />
               <View style={styles.authorInfo}>
                 <CustomText style={styles.authorName}>
@@ -224,7 +233,7 @@ export default function SocialScreen() {
                   @{item.author?.username || 'chef'}
                 </CustomText>
               </View>
-            </View>
+            </TouchableOpacity>
             <CustomText style={styles.cardTimestamp}>
               {new Date(item.created_at).toLocaleDateString()}
             </CustomText>
@@ -269,7 +278,11 @@ export default function SocialScreen() {
   const renderUserRow = useCallback(
     ({ item }: { item: UserResult }) => {
       return (
-        <View style={styles.userRow}>
+        <TouchableOpacity
+          style={styles.userRow}
+          activeOpacity={0.85}
+          onPress={() => router.push({ pathname: '/user-profile', params: { user_id: item.id } })}
+        >
           <View style={styles.userInfo}>
             <UserAvatar avatarUrl={item.avatar_url} size={56} />
             <View style={styles.userDetails}>
@@ -281,7 +294,10 @@ export default function SocialScreen() {
           </View>
           <TouchableOpacity
             style={[styles.followButton, item.is_following && styles.followButtonActive]}
-            onPress={() => handleFollowToggle(item)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleFollowToggle(item);
+            }}
             activeOpacity={0.85}
           >
             <CustomText
@@ -293,10 +309,10 @@ export default function SocialScreen() {
               {item.is_following ? 'Following' : 'Follow'}
             </CustomText>
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       );
     },
-    [handleFollowToggle]
+    [handleFollowToggle, router]
   );
 
   return (

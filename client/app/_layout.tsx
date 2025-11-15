@@ -33,6 +33,7 @@ export default function RootLayout() {
             <Stack.Screen name="screens/Auth/*" options={{ headerShown: false }} />
             <Stack.Screen name="chat" options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }} />
             <Stack.Screen name="recipe-detail" options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }} />
+            <Stack.Screen name="user-profile" options={{ presentation: 'modal', animation: 'slide_from_bottom', headerShown: false }} />
             <Stack.Screen name="+not-found" />
           </Stack>
           <StatusBar style="auto" />
