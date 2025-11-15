@@ -262,12 +262,14 @@ router.get('/feed', async (req, res) => {
 
     const followeeIds = followRows.map(row => row.followee_id);
 
+    // Get recipes from followed users - get more than limit to allow for ranking
+    const fetchLimit = Math.min(limit * 3, 100);
     const { data: recipes, error: recipeError } = await supabase
       .from('recipes')
       .select('*')
       .in('user_id', followeeIds)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .limit(fetchLimit);
 
     if (recipeError) {
       return res.status(500).json({ error: recipeError.message });
@@ -277,7 +279,90 @@ router.get('/feed', async (req, res) => {
       return res.json([]);
     }
 
-    const authorIds = [...new Set(recipes.map(recipe => recipe.user_id))];
+    const recipeIds = recipes.map(recipe => recipe.id);
+
+    // Get favorite counts for each recipe
+    const { data: favoriteCounts } = await supabase
+      .from('favorites')
+      .select('recipe_id')
+      .in('recipe_id', recipeIds);
+
+    const favoriteCountMap = new Map();
+    if (favoriteCounts) {
+      favoriteCounts.forEach(fav => {
+        favoriteCountMap.set(fav.recipe_id, (favoriteCountMap.get(fav.recipe_id) || 0) + 1);
+      });
+    }
+
+    // Check which recipes are favorited by current user
+    const { data: currentUserFavorites } = await supabase
+      .from('favorites')
+      .select('recipe_id')
+      .eq('user_id', req.user.id)
+      .in('recipe_id', recipeIds);
+
+    const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
+
+    // Score and rank recipes with smart algorithm
+    const now = Date.now();
+    const recipesWithScores = recipes.map(recipe => {
+      const favoriteCount = favoriteCountMap.get(recipe.id) || 0;
+      const createdTime = new Date(recipe.created_at).getTime();
+      const ageInHours = (now - createdTime) / (1000 * 60 * 60);
+      
+      // Scoring algorithm:
+      // - Recency: Newer recipes get higher score (exponential decay)
+      // - Engagement: More favorites = higher score
+      // - Balance: Slight boost for recipes with some engagement (1-10 favorites)
+      let score = 0;
+      
+      // Recency score (decays over time, newer = better)
+      // Recipes from last 24h get max score, decays over 7 days
+      const recencyScore = Math.max(0, 1 - (ageInHours / (24 * 7)));
+      score += recencyScore * 100; // Weight: 100
+      
+      // Engagement score (favorite count)
+      // Logarithmic scale so 1-2 favorites matter but don't dominate
+      const engagementScore = Math.log10(favoriteCount + 1) / Math.log10(50); // Normalize to 0-1
+      score += engagementScore * 50; // Weight: 50
+      
+      // Bonus for recipes with moderate engagement (sweet spot)
+      if (favoriteCount > 0 && favoriteCount < 10) {
+        score += 10; // Small boost for community engagement
+      }
+      
+      return {
+        ...recipe,
+        favorite_count: favoriteCount,
+        score,
+        created_time: createdTime,
+      };
+    });
+
+    // Sort by score, then diversify by author
+    recipesWithScores.sort((a, b) => b.score - a.score);
+
+    // Diversify: Limit recipes per author to ensure variety
+    const authorCountMap = new Map();
+    const diversifiedRecipes = [];
+    
+    for (const recipe of recipesWithScores) {
+      const authorId = recipe.user_id;
+      const authorCount = authorCountMap.get(authorId) || 0;
+      
+      // Allow max 2 recipes per author in top results, or if score is very high
+      if (authorCount < 2 || recipe.score > 120) {
+        diversifiedRecipes.push(recipe);
+        authorCountMap.set(authorId, authorCount + 1);
+        
+        if (diversifiedRecipes.length >= limit) {
+          break;
+        }
+      }
+    }
+
+    // Get author profiles
+    const authorIds = [...new Set(diversifiedRecipes.map(recipe => recipe.user_id))];
     const { data: authors, error: authorError } = await supabase
       .from('profiles')
       .select('id, display_name, username, avatar_url')
@@ -289,27 +374,19 @@ router.get('/feed', async (req, res) => {
 
     const authorMap = new Map(authors.map(author => [author.id, author]));
 
-    const recipeIds = recipes.map(recipe => recipe.id);
-    let favoriteIds = new Set();
-
-    const { data: favorites, error: favoritesError } = await supabase
-      .from('favorites')
-      .select('recipe_id')
-      .eq('user_id', req.user.id)
-      .in('recipe_id', recipeIds);
-
-    if (!favoritesError && favorites) {
-      favoriteIds = new Set(favorites.map(fav => fav.recipe_id));
-    }
-
-    const results = recipes.map(recipe => ({
+    // Format final results
+    const results = diversifiedRecipes.map(recipe => ({
       ...recipe,
       author: authorMap.get(recipe.user_id) || null,
-      is_favorited: favoriteIds.has(recipe.id),
+      is_favorited: currentUserFavoriteIds.has(recipe.id),
+      // Remove internal scoring fields
+      score: undefined,
+      created_time: undefined,
     }));
 
     res.json(results);
   } catch (error) {
+    console.error('[social/feed] Error:', error);
     res.status(500).json({ error: 'Failed to load social feed' });
   }
 });

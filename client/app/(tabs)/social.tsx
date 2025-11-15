@@ -17,15 +17,18 @@ import { Ionicons } from '@expo/vector-icons';
 
 import CustomText from '../../components/CustomText';
 import { socialService } from '../../lib/socialService';
+import { supabase } from '../../lib/supabase';
 
 type FeedItem = {
   id: string;
   title: string;
   time?: string | null;
   tags?: string[] | null;
+  ingredients?: string[] | null;
   created_at: string;
   user_id: string;
   is_favorited?: boolean;
+  favorite_count?: number;
   author?: {
     id: string;
     display_name?: string | null;
@@ -99,6 +102,13 @@ export default function SocialScreen() {
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUserId(data.user.id);
+    });
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
@@ -204,16 +214,91 @@ export default function SocialScreen() {
     }
   }, []);
 
+  const handleFeedFavoriteToggle = useCallback(async (recipe: FeedItem) => {
+    if (!userId || !recipe.id) return;
+
+    const wasFavorited = recipe.is_favorited || false;
+    const currentFavoriteCount = recipe.favorite_count || 0;
+
+    // Optimistic update
+    setFeed(prev =>
+      prev.map(item =>
+        item.id === recipe.id
+          ? {
+              ...item,
+              is_favorited: !wasFavorited,
+              favorite_count: wasFavorited
+                ? Math.max(0, currentFavoriteCount - 1)
+                : currentFavoriteCount + 1,
+            }
+          : item
+      )
+    );
+
+    try {
+      const url = 'https://familycooksclean.onrender.com/recipes/favorite';
+      if (!wasFavorited) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
+        });
+        if (!res.ok) throw new Error('Failed to favorite');
+      } else {
+        const res = await fetch(url, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
+        });
+        if (!res.ok) throw new Error('Failed to unfavorite');
+      }
+    } catch (error: any) {
+      console.log('[social] favorite toggle error', error);
+      Alert.alert('Action Failed', 'Please try again.');
+      // Revert optimistic update
+      setFeed(prev =>
+        prev.map(item =>
+          item.id === recipe.id
+            ? {
+                ...item,
+                is_favorited: wasFavorited,
+                favorite_count: currentFavoriteCount,
+              }
+            : item
+        )
+      );
+    }
+  }, [userId]);
+
+  // Format relative time (e.g., "2h ago", "3d ago")
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
   const renderFeedItem = useCallback(
     ({ item }: { item: FeedItem }) => {
       const tags = Array.isArray(item.tags) ? item.tags : [];
+      const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+      
       return (
         <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.85}
+          style={styles.feedCard}
+          activeOpacity={0.88}
           onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
         >
-          <View style={styles.cardHeader}>
+          {/* Author Header */}
+          <View style={styles.feedCardHeader}>
             <TouchableOpacity
               style={styles.authorBadge}
               activeOpacity={0.85}
@@ -224,39 +309,87 @@ export default function SocialScreen() {
                 }
               }}
             >
-              <UserAvatar avatarUrl={item.author?.avatar_url} size={40} />
+              <UserAvatar avatarUrl={item.author?.avatar_url} size={44} />
               <View style={styles.authorInfo}>
                 <CustomText style={styles.authorName}>
                   {item.author?.display_name || item.author?.username || 'Unknown Chef'}
                 </CustomText>
-                <CustomText style={styles.authorHandle}>
-                  @{item.author?.username || 'chef'}
-                </CustomText>
+                <View style={styles.authorMetaRow}>
+                  <CustomText style={styles.authorHandle}>
+                    @{item.author?.username || 'chef'}
+                  </CustomText>
+                  <CustomText style={styles.feedCardTimestamp}>
+                    • {formatRelativeTime(item.created_at)}
+                  </CustomText>
+                </View>
               </View>
             </TouchableOpacity>
-            <CustomText style={styles.cardTimestamp}>
-              {new Date(item.created_at).toLocaleDateString()}
-            </CustomText>
           </View>
-          <CustomText style={styles.cardTitle}>{item.title}</CustomText>
-          <View style={styles.cardMetaRow}>
+
+          {/* Recipe Title */}
+          <CustomText style={styles.feedCardTitle} numberOfLines={2}>
+            {item.title}
+          </CustomText>
+
+          {/* Recipe Metadata Row */}
+          <View style={styles.feedCardMetaRow}>
             {!!item.time && (
-              <View style={styles.metaChip}>
-                <Ionicons name="time-outline" size={14} color="#4B5563" />
-                <CustomText style={styles.metaChipText}>{item.time}</CustomText>
+              <View style={styles.feedMetaChip}>
+                <Ionicons name="time-outline" size={14} color="#64748B" />
+                <CustomText style={styles.feedMetaChipText}>{item.time}</CustomText>
               </View>
             )}
-            {tags.slice(0, 2).map(tag => (
-              <View key={tag} style={styles.metaChip}>
-                <Ionicons name="pricetag-outline" size={14} color="#4B5563" />
-                <CustomText style={styles.metaChipText}>{tag}</CustomText>
+            {ingredients.length > 0 && (
+              <View style={styles.feedMetaChip}>
+                <Ionicons name="list-outline" size={14} color="#64748B" />
+                <CustomText style={styles.feedMetaChipText}>
+                  {ingredients.length} {ingredients.length === 1 ? 'ingredient' : 'ingredients'}
+                </CustomText>
               </View>
-            ))}
+            )}
+            {(item.favorite_count || 0) > 0 && (
+              <View style={styles.feedMetaChip}>
+                <Ionicons name="heart" size={14} color="#E4576A" />
+                <CustomText style={[styles.feedMetaChipText, styles.favoriteCountText]}>
+                  {item.favorite_count}
+                </CustomText>
+              </View>
+            )}
           </View>
+
+          {/* Tags */}
+          {tags.length > 0 && (
+            <View style={styles.feedTagsRow}>
+              {tags.slice(0, 3).map(tag => (
+                <View key={tag} style={styles.feedTagChip}>
+                  <CustomText style={styles.feedTagText}>{tag}</CustomText>
+                </View>
+              ))}
+              {tags.length > 3 && (
+                <CustomText style={styles.moreTagsText}>+{tags.length - 3} more</CustomText>
+              )}
+            </View>
+          )}
+
+          {/* Favorite Button */}
+          <TouchableOpacity
+            style={styles.feedFavoriteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleFeedFavoriteToggle(item);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {item.is_favorited ? (
+              <Ionicons name="heart" size={22} color="#E4576A" />
+            ) : (
+              <Ionicons name="heart-outline" size={22} color="#94A3B8" />
+            )}
+          </TouchableOpacity>
         </TouchableOpacity>
       );
     },
-    [router]
+    [router, handleFeedFavoriteToggle]
   );
 
   const feedEmptyComponent = useMemo(() => {
@@ -478,8 +611,8 @@ const styles = StyleSheet.create({
   },
   feedContainer: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   listContent: {
     paddingBottom: 32,
@@ -497,6 +630,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEF2FF',
   },
+  feedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+    position: 'relative',
+  },
+  feedCardHeader: {
+    marginBottom: 14,
+  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -507,22 +657,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   authorInfo: {
-    marginLeft: 12,
+    marginLeft: 14,
     flex: 1,
   },
   authorName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  authorMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   authorHandle: {
     fontSize: 13,
     color: '#64748B',
+    fontWeight: '500',
+  },
+  feedCardTimestamp: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   cardTimestamp: {
     fontSize: 12,
     color: '#94A3B8',
+  },
+  feedCardTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 28,
+    marginBottom: 14,
+    letterSpacing: -0.3,
   },
   cardTitle: {
     marginTop: 12,
@@ -530,11 +700,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
+  feedCardMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
   cardMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 12,
     gap: 8,
+  },
+  feedMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 6,
   },
   metaChip: {
     flexDirection: 'row',
@@ -545,10 +730,54 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
+  feedMetaChipText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
+  },
   metaChipText: {
     fontSize: 12,
     color: '#475569',
     fontWeight: '600',
+  },
+  favoriteCountText: {
+    color: '#E4576A',
+  },
+  feedTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  feedTagChip: {
+    backgroundColor: '#F0F9F4',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  feedTagText: {
+    fontSize: 12,
+    color: '#2F855A',
+    fontWeight: '700',
+  },
+  moreTagsText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  feedFavoriteButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   discoverContainer: {
     flex: 1,
