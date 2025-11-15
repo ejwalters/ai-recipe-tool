@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Alert,
   Image,
+  Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -94,6 +95,167 @@ const UserAvatar = ({
   );
 };
 
+// Discover Loading Skeleton Component
+const DiscoverLoadingSkeleton = () => {
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const shimmerAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    // Pulsing animation for avatars
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Shimmer animation for skeleton lines
+    const shimmerLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    shimmerLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+      shimmerLoop.stop();
+    };
+  }, []);
+
+  const shimmerOpacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <View style={styles.listContent}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Animated.View key={i} style={[styles.skeletonUserRow, { opacity: shimmerOpacity }]}>
+          <View style={styles.skeletonUserInfo}>
+            <Animated.View style={[styles.skeletonUserAvatar, { transform: [{ scale: pulseAnim }] }]}>
+              <Ionicons name="person" size={28} color="#CBD5F5" />
+            </Animated.View>
+            <View style={styles.skeletonUserDetails}>
+              <Animated.View style={[styles.skeletonLine, styles.skeletonUserName, { opacity: shimmerOpacity }]} />
+              <Animated.View style={[styles.skeletonLine, styles.skeletonUserHandle, { opacity: shimmerOpacity }]} />
+            </View>
+          </View>
+          <Animated.View style={[styles.skeletonFollowButton, { opacity: shimmerOpacity }]} />
+        </Animated.View>
+      ))}
+    </View>
+  );
+};
+
+// Feed Loading Skeleton Component
+const FeedLoadingSkeleton = () => {
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const shimmerAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    // Pulsing animation for avatars
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Shimmer animation for skeleton lines
+    const shimmerLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    shimmerLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+      shimmerLoop.stop();
+    };
+  }, []);
+
+  const shimmerOpacity = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <View style={styles.listContent}>
+      {[1, 2, 3, 4].map((i) => (
+        <Animated.View key={i} style={[styles.skeletonFeedCard, { opacity: shimmerOpacity }]}>
+          {/* Header with avatar and name */}
+          <View style={styles.skeletonFeedHeader}>
+            <Animated.View style={[styles.skeletonFeedAvatar, { transform: [{ scale: pulseAnim }] }]}>
+              <Ionicons name="person" size={20} color="#CBD5F5" />
+            </Animated.View>
+            <View style={styles.skeletonFeedAuthorInfo}>
+              <Animated.View style={[styles.skeletonLine, styles.skeletonFeedAuthorName, { opacity: shimmerOpacity }]} />
+              <Animated.View style={[styles.skeletonLine, styles.skeletonFeedTime, { opacity: shimmerOpacity }]} />
+            </View>
+          </View>
+
+          {/* Recipe title */}
+          <Animated.View style={[styles.skeletonLine, styles.skeletonFeedTitle, { opacity: shimmerOpacity }]} />
+          <Animated.View style={[styles.skeletonLine, styles.skeletonFeedTitleShort, { opacity: shimmerOpacity }]} />
+
+          {/* Meta info */}
+          <View style={styles.skeletonFeedMeta}>
+            <Animated.View style={[styles.skeletonLine, styles.skeletonFeedMetaItem, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonLine, styles.skeletonFeedMetaItem, { opacity: shimmerOpacity }]} />
+          </View>
+
+          {/* Tags */}
+          <View style={styles.skeletonTagsRow}>
+            <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+            <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+          </View>
+        </Animated.View>
+      ))}
+    </View>
+  );
+};
+
 export default function SocialScreen() {
   const router = useRouter();
   const [activeSegment, setActiveSegment] = useState<'feed' | 'discover'>('feed');
@@ -103,6 +265,7 @@ export default function SocialScreen() {
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const feedLoadedRef = useRef(false); // Track if feed has been loaded at least once
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -115,8 +278,9 @@ export default function SocialScreen() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSearchedRef = useRef(false); // Track if user has performed at least one search
 
-  const loadFeed = useCallback(async () => {
+  const loadFeed = useCallback(async (isInitial = false) => {
     setFeedError(null);
     try {
       if (!feedRefreshing) {
@@ -124,6 +288,9 @@ export default function SocialScreen() {
       }
       const results = await socialService.getFeed(40);
       setFeed(Array.isArray(results) ? results : []);
+      if (isInitial || !feedLoadedRef.current) {
+        feedLoadedRef.current = true;
+      }
     } catch (error: any) {
       console.log('[social] loadFeed error', error);
       setFeedError('Unable to load feed right now.');
@@ -137,17 +304,27 @@ export default function SocialScreen() {
     setFeedRefreshing(true);
   }, []);
 
+  // Load feed on initial mount
+  useEffect(() => {
+    if (activeSegment === 'feed' && !feedLoadedRef.current) {
+      loadFeed(true);
+    }
+  }, [activeSegment, loadFeed]);
+
+  // Don't reload on focus if feed is already loaded
   useFocusEffect(
     useCallback(() => {
-      if (activeSegment === 'feed') {
-        loadFeed();
+      // Only reload on focus if feed hasn't been loaded yet
+      // This prevents reloading when navigating back from recipe/profile
+      if (activeSegment === 'feed' && !feedLoadedRef.current) {
+        loadFeed(true);
       }
     }, [activeSegment, loadFeed])
   );
 
   useEffect(() => {
     if (feedRefreshing) {
-      loadFeed();
+      loadFeed(false);
     }
   }, [feedRefreshing, loadFeed]);
 
@@ -164,16 +341,24 @@ export default function SocialScreen() {
       setSearchResults([]);
       setSearching(false);
       setSearchError(null);
+      hasSearchedRef.current = false;
       return;
     }
 
-    setSearching(true);
+    // Only show skeleton on the very first search
+    // After that, keep showing previous results while searching (no skeleton on backspace/refinement)
+    const isInitialSearch = !hasSearchedRef.current;
+    if (isInitialSearch) {
+      setSearching(true);
+      setSearchResults([]); // Clear any stale results for initial search
+    }
     setSearchError(null);
 
     debounceRef.current = setTimeout(async () => {
       try {
         const results = await socialService.searchUsers(searchTerm);
         setSearchResults(Array.isArray(results) ? results : []);
+        hasSearchedRef.current = true; // Mark that we've searched at least once
       } catch (error: any) {
         console.log('[social] search error', error);
         setSearchError('Unable to search users right now.');
@@ -478,10 +663,8 @@ export default function SocialScreen() {
 
       {activeSegment === 'feed' ? (
         <View style={styles.feedContainer}>
-          {loadingFeed ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4F9E7A" />
-            </View>
+          {loadingFeed && !feedLoadedRef.current ? (
+            <FeedLoadingSkeleton />
           ) : (
             <FlatList
               data={feed}
@@ -532,10 +715,8 @@ export default function SocialScreen() {
                 Search for friends, family, or favorite creators to follow.
               </CustomText>
             </View>
-          ) : searching ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4F9E7A" />
-            </View>
+          ) : searching && searchResults.length === 0 ? (
+            <DiscoverLoadingSkeleton />
           ) : (
             <FlatList
               data={searchResults}
@@ -543,13 +724,22 @@ export default function SocialScreen() {
               renderItem={renderUserRow}
               contentContainerStyle={styles.listContent}
               ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Ionicons name="person-add-outline" size={48} color="#9CA3AF" />
-                  <CustomText style={styles.emptyHeading}>No matches yet</CustomText>
-                  <CustomText style={styles.emptyText}>
-                    Try a different name or invite friends to join.
-                  </CustomText>
-                </View>
+                searching ? (
+                  <View style={styles.emptyState}>
+                    <ActivityIndicator size="small" color="#4F9E7A" />
+                    <CustomText style={[styles.emptyText, { marginTop: 16 }]}>
+                      Searching...
+                    </CustomText>
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="person-add-outline" size={48} color="#9CA3AF" />
+                    <CustomText style={styles.emptyHeading}>No matches yet</CustomText>
+                    <CustomText style={styles.emptyText}>
+                      Try a different name or invite friends to join.
+                    </CustomText>
+                  </View>
+                )
               }
             />
           )}
@@ -905,6 +1095,137 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#DC2626',
     textAlign: 'center',
+  },
+  // Feed Loading Skeleton Styles
+  skeletonFeedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+  },
+  skeletonFeedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skeletonFeedAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E2F9EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#D1FAE5',
+    marginRight: 12,
+  },
+  skeletonFeedAuthorInfo: {
+    flex: 1,
+  },
+  skeletonLine: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+  },
+  skeletonFeedAuthorName: {
+    width: 120,
+    height: 16,
+    marginBottom: 8,
+  },
+  skeletonFeedTime: {
+    width: 80,
+    height: 12,
+  },
+  skeletonFeedTitle: {
+    width: '85%',
+    height: 20,
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  skeletonFeedTitleShort: {
+    width: '60%',
+    height: 20,
+    marginBottom: 16,
+    borderRadius: 8,
+  },
+  skeletonFeedMeta: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  skeletonFeedMetaItem: {
+    width: 60,
+    height: 14,
+  },
+  skeletonTagsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  skeletonTag: {
+    width: 70,
+    height: 24,
+    borderRadius: 12,
+  },
+  // Discover Loading Skeleton Styles
+  skeletonUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    marginBottom: 12,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+  },
+  skeletonUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
+  },
+  skeletonUserAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E2F9EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#D1FAE5',
+  },
+  skeletonUserDetails: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  skeletonUserName: {
+    width: 140,
+    height: 18,
+    marginBottom: 8,
+    borderRadius: 4,
+  },
+  skeletonUserHandle: {
+    width: 100,
+    height: 14,
+    borderRadius: 4,
+  },
+  skeletonFollowButton: {
+    width: 90,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
   },
 });
 
