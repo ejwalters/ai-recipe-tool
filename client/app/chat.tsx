@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, ActivityIndicator, Animated, Easing, Platform, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, ActivityIndicator, Animated, Easing, Platform, Dimensions, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -8,19 +8,23 @@ import { supabase } from '../lib/supabase';
 
 const PALETTE = {
     appBackground: '#F4F5FB',
-    chatBackground: '#F7F9FD',
-    header: '#3E8C6D',
-    aiBubble: '#FFFFFF',
-    aiBorder: '#E3E8FF',
-    aiText: '#1F2533',
-    userBubble: '#3E8C6D',
-    userText: '#F5FFF8',
-    timestampMuted: '#8A94A6',
+    chatBackground: '#FFFFFF',
+    header: '#256D85', // App's teal/green accent
+    headerText: '#FFFFFF',
+    aiBubble: '#F7F7FA', // Light beige/gray like the image
+    aiBorder: '#E5E7EB',
+    aiText: '#1F2937',
+    userBubble: '#256D85', // App's primary green/teal
+    userText: '#FFFFFF',
+    timestampMuted: '#9CA3AF',
     inputBackground: '#FFFFFF',
-    inputBorder: '#E1E8F5',
-    inputShadow: 'rgba(62, 140, 109, 0.18)',
-    sendEnabled: '#3E8C6D',
+    inputBorder: '#E5E7EB',
+    inputShadow: 'rgba(37, 109, 133, 0.12)',
+    sendEnabled: '#256D85',
     sendDisabled: '#E2E8F0',
+    suggestionTag: '#FFFFFF',
+    suggestionTagBorder: '#E5E7EB',
+    suggestionTagText: '#4B5563',
 };
 
 const CARD_COLORS = ['#E5F3EC', '#E6EEFF', '#FFF1E6', '#EFE5FF'];
@@ -81,7 +85,9 @@ const AITypingIndicator = () => {
 
     return (
         <View style={styles.messageRow}>
-            <Image source={require('../assets/images/ai-avatar.png')} style={styles.messageAvatar} />
+            <View style={styles.aiAvatarCircle}>
+                <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+            </View>
             <View style={styles.typingCard}>
                 <View style={styles.typingHeader}>
                     <Animated.View style={[styles.typingIconWrapper, { transform: [{ rotate: spin }] }]}>
@@ -121,7 +127,7 @@ const AITypingIndicator = () => {
     );
 };
 
-export const HEADER_HEIGHT = 110;
+export const HEADER_HEIGHT = Platform.OS === 'ios' ? 120 : 100;
 
 // Helper to extract JSON from a string (handles code blocks and extra text)
 function extractJsonFromString(str: string) {
@@ -158,38 +164,20 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
             style={[
                 styles.recipeCardModern,
                 {
-                    backgroundColor: cardColor,
-                    borderColor: `${iconBg}66`,
+                    backgroundColor: PALETTE.aiBubble,
+                    borderColor: PALETTE.aiBorder,
                 },
             ]} 
             activeOpacity={0.88}
             onPress={onPress}
         >
-            <View style={styles.recipeCardLeftModern}>
-                <View style={[styles.cardImageWrapperModern, { backgroundColor: iconBg }]}> 
-                    {message.recipe.image_url ? (
-                        <Image source={{ uri: message.recipe.image_url }} style={styles.cardImageModern} />
-                    ) : (
-                        <Ionicons name="fast-food-outline" size={32} color="#B0B0B0" />
-                    )}
-                </View>
-            </View>
             <View style={styles.recipeCardRightModern}>
                 <CustomText style={styles.recipeTitleModern}>{message.recipe.name}</CustomText>
-                <View style={styles.metaPillWrapperModern}>
-                    <View style={styles.metaPillModern}>
-                        <Ionicons name="list-outline" size={14} color="#4B5563" style={{ marginRight: 4 }} />
-                        <CustomText style={styles.metaPillTextModern}>
-                            {Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients
-                        </CustomText>
-                    </View>
-                </View>
-                <View style={styles.metaPillWrapperModern}>
-                    <View style={styles.metaPillModern}>
-                        <Ionicons name="time-outline" size={14} color="#4B5563" style={{ marginRight: 4 }} />
-                        <CustomText style={styles.metaPillTextModern}>{message.recipe.time || '—'}</CustomText>
-                    </View>
-                </View>
+                <CustomText style={styles.recipeDescriptionModern}>
+                    {message.recipe.time || Array.isArray(message.recipe.ingredients) 
+                        ? `${message.recipe.time || 'Quick'}, ${Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients`
+                        : 'Delicious recipe'}
+                </CustomText>
             </View>
         </TouchableOpacity>
     );
@@ -198,6 +186,7 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
 export default function ChatScreen() {
     const router = useRouter();
     const { chat_id } = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState<string | null>(null);
@@ -205,7 +194,9 @@ export default function ChatScreen() {
     const [currentChatId, setCurrentChatId] = useState<string | null>(chat_id ? String(chat_id) : null);
     const [sending, setSending] = useState(false);
     const [message, setMessage] = useState('');
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
+    const inputBottomOffset = useRef(new Animated.Value(0)).current;
 
     // Fetch user ID and profile on mount
     useEffect(() => {
@@ -364,6 +355,43 @@ export default function ChatScreen() {
         }
     }, [messages]);
 
+    // Handle keyboard show/hide events
+    useEffect(() => {
+        const keyboardWillShowListener = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            (e) => {
+                const height = e.endCoordinates.height;
+                setKeyboardHeight(height);
+                // Push input up by keyboard height plus a small buffer to ensure full visibility
+                Animated.timing(inputBottomOffset, {
+                    toValue: height,
+                    duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
+                    useNativeDriver: false,
+                }).start();
+                setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+            }
+        );
+
+        const keyboardWillHideListener = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            (e) => {
+                setKeyboardHeight(0);
+                Animated.timing(inputBottomOffset, {
+                    toValue: 0,
+                    duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
+                    useNativeDriver: false,
+                }).start();
+            }
+        );
+
+        return () => {
+            keyboardWillShowListener.remove();
+            keyboardWillHideListener.remove();
+        };
+    }, [inputBottomOffset]);
+
     const sendMessage = async () => {
         if (!message.trim() || !userId) return;
         
@@ -487,52 +515,53 @@ export default function ChatScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.outerContainer} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.outerContainer} edges={['top']}>
             {/* Header */}
             <View style={styles.headerModern}>
-                <View style={styles.headerTitleContainer}>
-                    <CustomText style={styles.headerTitle}>AI Chef</CustomText>
-                    <View style={styles.headerStatusRow}>
-                        <View style={styles.headerStatusDot} />
-                        <CustomText style={styles.headerStatusText}>Online</CustomText>
-                    </View>
-                </View>
                 <TouchableOpacity 
-                    style={styles.headerCloseButtonRight}
+                    style={styles.headerBackButton}
                     onPress={() => router.back()}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="close" size={24} color="#fff" />
+                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.headerTitleContainer}>
+                    <CustomText style={styles.headerTitle}>Recipe Assistant</CustomText>
+                    <CustomText style={styles.headerSubtitle}>AI Chef at your service</CustomText>
+                </View>
+                <TouchableOpacity 
+                    style={styles.headerMenuButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
             
-            {/* Chat Messages */}
-            <View style={styles.chatAreaBg}>
-                <View style={styles.chatGradient}>
-                    <ScrollView 
-                        ref={scrollViewRef}
-                        style={styles.messagesContainer} 
-                        contentContainerStyle={styles.messagesContent}
-                        showsVerticalScrollIndicator={false}
-                    >
+            {/* Chat Messages and Input - Wrapped in KeyboardAvoidingView */}
+            <View style={{ flex: 1 }}>
+                {/* Chat Messages */}
+                <View style={styles.chatAreaBg}>
+                    <View style={styles.chatGradient}>
+                        <ScrollView 
+                            ref={scrollViewRef}
+                            style={styles.messagesContainer} 
+                            contentContainerStyle={styles.messagesContent}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="interactive"
+                            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+                        >
                     {/* Show welcome message for new chats */}
                     {messages.length === 0 && (
-                        <View style={styles.welcomeContainer}>
-                            <Image source={require('../assets/images/ai-avatar.png')} style={styles.welcomeAvatar} />
-                            <View style={styles.welcomeBubble}>
-                                <CustomText style={styles.welcomeTitle}>👋 Welcome to AI Chef!</CustomText>
-                                <CustomText style={styles.welcomeText}>
-                                    I'm your personal AI chef assistant. I can help you with:
-                                </CustomText>
-                                <View style={styles.welcomeList}>
-                                    <CustomText style={styles.welcomeListItem}>• Recipe suggestions based on your preferences</CustomText>
-                                    <CustomText style={styles.welcomeListItem}>• Cooking tips and techniques</CustomText>
-                                    <CustomText style={styles.welcomeListItem}>• Ingredient substitutions</CustomText>
-                                    <CustomText style={styles.welcomeListItem}>• Meal planning ideas</CustomText>
+                        <View style={[styles.messageRow, styles.aiRow, { marginTop: 8 }]}>
+                            <View style={styles.aiAvatarCircle}>
+                                <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                            </View>
+                            <View style={styles.aiMessageContainer}>
+                                <View style={styles.aiBubble}>
+                                    <CustomText style={styles.aiText}>Hi there! I'm your AI recipe assistant. Tell me what ingredients you have, dietary preferences, or what you're craving, and I'll help you create something delicious!</CustomText>
                                 </View>
-                                <CustomText style={styles.welcomeText}>
-                                    Just ask me anything about cooking, and I'll create personalized recipes for you!
-                                </CustomText>
+                                <CustomText style={[styles.timestamp, styles.aiTimestamp]}>Just now</CustomText>
                             </View>
                         </View>
                     )}
@@ -552,11 +581,14 @@ export default function ChatScreen() {
                             return (
                                 <View key={msg.id} style={[styles.messageRow, styles.aiRow, !isGrouped && { marginTop: 18 }]}> 
                                     {!isGrouped && (
-                                        <Image source={require('../assets/images/ai-avatar.png')} style={styles.messageAvatar} />
+                                        <View style={styles.aiAvatarCircle}>
+                                            <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                                        </View>
                                     )}
-                                    <RecipeCardMessage 
-                                        message={msg}
-                                        onPress={() => {
+                                    <View style={styles.aiMessageContainer}>
+                                        <RecipeCardMessage 
+                                            message={msg}
+                                            onPress={() => {
                                             console.log('Recipe card pressed:', {
                                                 message_id: msg.id,
                                                 saved_recipe_id: msg.saved_recipe_id,
@@ -588,7 +620,9 @@ export default function ChatScreen() {
                                                 router.push({ pathname: '/recipe-detail', params });
                                             }
                                         }}
-                                    />
+                                        />
+                                        <CustomText style={[styles.timestamp, styles.aiTimestamp]}>{timestamp}</CustomText>
+                                    </View>
                                 </View>
                             );
                         }
@@ -598,10 +632,14 @@ export default function ChatScreen() {
                             return (
                                 <View key={msg.id} style={[styles.messageRow, styles.aiRow, !isGrouped && { marginTop: 18 }]}> 
                                     {!isGrouped && (
-                                        <Image source={require('../assets/images/ai-avatar.png')} style={styles.messageAvatar} />
+                                        <View style={styles.aiAvatarCircle}>
+                                            <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                                        </View>
                                     )}
-                                    <View style={[styles.aiBubble, !isGrouped && styles.aiBubbleTail]}> 
-                                        <CustomText style={styles.aiText}>{msg.text}</CustomText>
+                                    <View style={styles.aiMessageContainer}>
+                                        <View style={[styles.aiBubble, !isGrouped && styles.aiBubbleTail]}> 
+                                            <CustomText style={styles.aiText}>{msg.text}</CustomText>
+                                        </View>
                                         <CustomText style={[styles.timestamp, styles.aiTimestamp]}>{timestamp}</CustomText>
                                     </View>
                                 </View>
@@ -611,21 +649,24 @@ export default function ChatScreen() {
                         // User message
                         return (
                             <View key={msg.id} style={[styles.messageRow, styles.userRow, !isGrouped && { marginTop: 18 }]}> 
-                                <View style={[styles.userBubble, !isGrouped && styles.userBubbleTail]}>
-                                    <CustomText style={styles.userText}>{msg.text}</CustomText>
+                                <View style={styles.userMessageContainer}>
+                                    <View style={[styles.userBubble, !isGrouped && styles.userBubbleTail]}>
+                                        <CustomText style={styles.userText}>{msg.text}</CustomText>
+                                    </View>
                                     <CustomText style={[styles.timestamp, styles.userTimestamp]}>{timestamp}</CustomText>
                                 </View>
                                 {!isGrouped && (
-                                    <Image 
-                                        source={
-                                            userProfile?.avatar_url
-                                                ? { uri: userProfile.avatar_url }
-                                                : require('../assets/images/avatar.png')
-                                        } 
-                                        style={styles.messageAvatar} 
-                                        onError={() => console.log('Failed to load user avatar:', userProfile?.avatar_url)}
-                                        onLoad={() => console.log('Successfully loaded user avatar:', userProfile?.avatar_url)}
-                                    />
+                                    <View style={styles.userAvatarCircle}>
+                                        {userProfile?.avatar_url ? (
+                                            <Image 
+                                                source={{ uri: userProfile.avatar_url }}
+                                                style={styles.userAvatarImage}
+                                                onError={() => console.log('Failed to load user avatar')}
+                                            />
+                                        ) : (
+                                            <Ionicons name="person" size={16} color="#FFFFFF" />
+                                        )}
+                                    </View>
                                 )}
                             </View>
                         );
@@ -635,13 +676,49 @@ export default function ChatScreen() {
             </View>
             
             {/* Input Bar */}
-            <SafeAreaView edges={['bottom']} style={styles.safeAreaInput}>
+            <Animated.View 
+                style={[
+                    styles.safeAreaInput, 
+                    { 
+                        marginBottom: inputBottomOffset,
+                        paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom,
+                    }
+                ]}
+            >
                 <View style={styles.inputContainer}>
+                    {/* Suggestion Tags */}
+                    <View style={styles.suggestionTagsContainer}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionTagsContent}>
+                            <TouchableOpacity 
+                                style={styles.suggestionTag}
+                                onPress={() => setMessage('Show me healthy options')}
+                            >
+                                <Ionicons name="checkbox-outline" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
+                                <CustomText style={styles.suggestionTagText}>Healthy options</CustomText>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.suggestionTag}
+                                onPress={() => setMessage('Quick meals')}
+                            >
+                                <Ionicons name="flash" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
+                                <CustomText style={styles.suggestionTagText}>Quick meals</CustomText>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.suggestionTag}
+                                onPress={() => setMessage('Vegetarian recipes')}
+                            >
+                                <Ionicons name="leaf-outline" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
+                                <CustomText style={styles.suggestionTagText}>Vegetarian</CustomText>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                    
+                    {/* Input Box */}
                     <View style={styles.inputBox}>
                         <TextInput
                             style={styles.textInput}
-                            placeholder="Type Message"
-                            placeholderTextColor="#B0B0B0"
+                            placeholder="Ask for a recipe..."
+                            placeholderTextColor="#9CA3AF"
                             value={message}
                             onChangeText={setMessage}
                             multiline
@@ -657,7 +734,8 @@ export default function ChatScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </SafeAreaView>
+            </Animated.View>
+            </View>
         </SafeAreaView>
     );
 }
@@ -685,8 +763,6 @@ const styles = StyleSheet.create({
         right: 0,
         height: HEADER_HEIGHT,
         backgroundColor: PALETTE.header,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -695,125 +771,135 @@ const styles = StyleSheet.create({
         zIndex: 10,
         paddingTop: Platform.OS === 'ios' ? 48 : 32,
         paddingBottom: 20,
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
+    },
+    headerBackButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     headerTitleContainer: {
+        flex: 1,
         alignItems: 'center',
     },
     headerTitle: {
         fontSize: 22,
         fontWeight: '800',
-        color: '#fff',
+        color: PALETTE.headerText,
         textAlign: 'center',
-        marginBottom: 4,
         letterSpacing: -0.5,
     },
-    headerStatusRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    headerStatusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#D9FBE8',
-        marginRight: 6,
-    },
-    headerStatusText: {
+    headerSubtitle: {
         fontSize: 14,
-        color: '#fff',
-        fontWeight: '600',
+        color: PALETTE.headerText,
+        textAlign: 'center',
+        marginTop: 2,
+        opacity: 0.9,
+        fontWeight: '500',
     },
-    headerCloseButtonRight: {
-        position: 'absolute',
-        top: Platform.OS === 'ios' ? 32 : 32,
-        right: 24,
+    headerMenuButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.25)',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-        zIndex: 10,
     },
     chatAreaBg: {
         flex: 1,
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
         marginTop: HEADER_HEIGHT,
         overflow: 'hidden',
         backgroundColor: PALETTE.chatBackground,
     },
     chatGradient: {
         flex: 1,
-        paddingTop: 24,
+        paddingTop: 20,
         backgroundColor: PALETTE.chatBackground,
     },
     messagesContainer: {
         flex: 1,
     },
     messagesContent: {
-        paddingBottom: 140,
+        paddingBottom: 100,
         paddingHorizontal: 20,
         paddingTop: 4,
     },
     messageRow: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
-        marginBottom: 16,
+        alignItems: 'flex-start',
+        marginBottom: 12,
     },
     aiRow: {
         justifyContent: 'flex-start',
     },
     userRow: {
-        flexDirection: 'row-reverse',
         justifyContent: 'flex-end',
     },
-    messageAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        marginHorizontal: 8,
-        backgroundColor: '#D9F1E5',
+    aiAvatarCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: PALETTE.header,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+        marginTop: 2,
+    },
+    userAvatarCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: PALETTE.header,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 10,
+        marginTop: 2,
+        overflow: 'hidden',
+    },
+    userAvatarImage: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+    },
+    aiMessageContainer: {
+        flex: 1,
+        maxWidth: SCREEN_WIDTH * 0.75,
+    },
+    userMessageContainer: {
+        flex: 1,
+        maxWidth: SCREEN_WIDTH * 0.75,
+        alignItems: 'flex-end',
     },
     aiBubble: {
         backgroundColor: PALETTE.aiBubble,
-        borderRadius: 22,
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        marginHorizontal: 8,
-        shadowColor: 'rgba(26, 35, 52, 0.12)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 4,
-        maxWidth: SCREEN_WIDTH * 0.82,
+        borderRadius: 18,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        shadowColor: 'rgba(0, 0, 0, 0.06)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
         borderWidth: 1,
         borderColor: PALETTE.aiBorder,
     },
     userBubble: {
         backgroundColor: PALETTE.userBubble,
-        borderRadius: 22,
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        marginHorizontal: 8,
-        shadowColor: 'rgba(62, 140, 109, 0.32)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.18,
-        shadowRadius: 12,
-        elevation: 4,
-        maxWidth: SCREEN_WIDTH * 0.82,
+        borderRadius: 18,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        shadowColor: 'rgba(37, 109, 133, 0.2)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
     },
     aiBubbleTail: {
-        borderBottomLeftRadius: 0,
+        borderBottomLeftRadius: 4,
     },
     userBubbleTail: {
-        borderBottomRightRadius: 0,
+        borderBottomRightRadius: 4,
     },
     aiText: {
         color: PALETTE.aiText,
@@ -830,62 +916,90 @@ const styles = StyleSheet.create({
         letterSpacing: -0.1,
     },
     timestamp: {
-        fontSize: 12,
-        marginTop: 8,
-        textAlign: 'right',
+        fontSize: 11,
+        marginTop: 4,
+        textAlign: 'left',
     },
     aiTimestamp: {
         color: PALETTE.timestampMuted,
+        marginLeft: 16,
     },
     userTimestamp: {
-        color: 'rgba(243, 255, 248, 0.7)',
+        color: PALETTE.timestampMuted,
+        marginRight: 16,
+        textAlign: 'right',
     },
     safeAreaInput: {
         backgroundColor: PALETTE.chatBackground,
     },
     inputContainer: {
         backgroundColor: 'transparent',
-        paddingHorizontal: 20,
-        paddingBottom: 20,
-        paddingTop: 0,
+        paddingHorizontal: 16,
+        paddingBottom: 0,
+        paddingTop: 8,
+    },
+    suggestionTagsContainer: {
+        marginBottom: 12,
+    },
+    suggestionTagsContent: {
+        paddingHorizontal: 4,
+        gap: 10,
+    },
+    suggestionTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: PALETTE.suggestionTag,
+        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: PALETTE.suggestionTagBorder,
+    },
+    suggestionTagText: {
+        fontSize: 14,
+        color: PALETTE.suggestionTagText,
+        fontWeight: '600',
     },
     inputBox: {
         flexDirection: 'row',
-        alignItems: 'flex-end',
+        alignItems: 'center',
         backgroundColor: PALETTE.inputBackground,
         borderRadius: 24,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        shadowColor: PALETTE.inputShadow,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
-        shadowRadius: 20,
-        elevation: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         borderWidth: 1,
         borderColor: PALETTE.inputBorder,
+        shadowColor: PALETTE.inputShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    inputIconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
     },
     textInput: {
         flex: 1,
         fontSize: 16,
-        color: '#1F2533',
-        maxHeight: 120,
-        paddingVertical: 6,
+        color: '#1F2937',
+        maxHeight: 100,
+        paddingVertical: 4,
         lineHeight: 20,
-        fontWeight: '500',
+        fontWeight: '400',
     },
     sendButton: {
         backgroundColor: PALETTE.sendEnabled,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 12,
-        shadowColor: 'rgba(62, 140, 109, 0.35)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.28,
-        shadowRadius: 8,
-        elevation: 6,
+        marginLeft: 8,
     },
     sendButtonDisabled: {
         backgroundColor: PALETTE.sendDisabled,
@@ -896,57 +1010,36 @@ const styles = StyleSheet.create({
     recipeCardModern: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 24,
-        paddingVertical: 18,
-        paddingHorizontal: 16,
-        marginBottom: 12,
-        shadowColor: 'rgba(15, 23, 42, 0.08)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.16,
-        shadowRadius: 14,
-        elevation: 4,
-        position: 'relative',
-        marginTop: 4,
-        minHeight: 12,
-        maxWidth: SCREEN_WIDTH * 0.78,
-        marginHorizontal: 8,
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        marginBottom: 10,
+        shadowColor: 'rgba(0, 0, 0, 0.06)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
         borderWidth: 1,
-    },
-    recipeCardLeftModern: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    cardImageWrapperModern: {
-        width: 62,
-        height: 62,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 0,
-        shadowColor: 'rgba(15, 23, 42, 0.12)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-        elevation: 4,
-    },
-    cardImageModern: {
-        width: 62,
-        height: 62,
-        borderRadius: 20,
-        resizeMode: 'cover',
+        maxWidth: SCREEN_WIDTH * 0.75,
     },
     recipeCardRightModern: {
         flex: 1,
         justifyContent: 'center',
         minWidth: 0,
-        paddingRight: 4,
     },
     recipeTitleModern: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#1F2533',
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
         textAlign: 'left',
+        marginBottom: 4,
+    },
+    recipeDescriptionModern: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '400',
+        textAlign: 'left',
+        lineHeight: 18,
         marginBottom: 10,
         flexShrink: 1,
         maxWidth: '100%',
