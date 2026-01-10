@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "entryPoint": "./client/app",
+    "extra": {
+      "eas": {
+        "projectId": "c1093962-cd55-4fbb-9b8d-b85c71e08dd5"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c1093962-cd55-4fbb-9b8d-b85c71e08dd5"
+    },
+    "name": "AI Recipe Tool",
+    "slug": "ai-recipe-tool",
+    "android": {},
+    "ios": {
+      "bundleIdentifier": "com.ejwalters24.airecipetool",
+      "scheme": "airecipetool",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

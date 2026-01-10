@@ -50,31 +50,85 @@ const SearchBar = ({
     );
 };
 
-function ForkKnifeLoading() {
+// Recipe Loading Skeleton Component
+const RecipeLoadingSkeleton = () => {
     const pulseAnim = React.useRef(new Animated.Value(1)).current;
+    const shimmerAnim = React.useRef(new Animated.Value(0)).current;
 
     React.useEffect(() => {
-        const loop = Animated.loop(
+        // Pulsing animation for icons
+        const pulseLoop = Animated.loop(
             Animated.sequence([
-                Animated.timing(pulseAnim, { toValue: 1.15, duration: 600, useNativeDriver: true }),
-                Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1.05,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 800,
+                    useNativeDriver: true,
+                }),
             ])
         );
-        loop.start();
-        return () => loop.stop();
-    }, [pulseAnim]);
+
+        // Shimmer animation for skeleton lines
+        const shimmerLoop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmerAnim, {
+                    toValue: 1,
+                    duration: 1200,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(shimmerAnim, {
+                    toValue: 0,
+                    duration: 1200,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+
+        pulseLoop.start();
+        shimmerLoop.start();
+
+        return () => {
+            pulseLoop.stop();
+            shimmerLoop.stop();
+        };
+    }, []);
+
+    const shimmerOpacity = shimmerAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.3, 0.7],
+    });
 
     return (
-        <View style={styles.loadingContainer}>
-            <Animated.Image
-                source={require('../../assets/images/fork-knife.png')}
-                style={[styles.loadingIcon, { transform: [{ scale: pulseAnim }] }]}
-                resizeMode="contain"
-            />
-            <CustomText style={styles.loadingText}>Searching recipes...</CustomText>
+        <View style={styles.listContentContainer}>
+            {[1, 2, 3, 4].map((i) => (
+                <Animated.View key={i} style={[styles.skeletonRecipeCard, { opacity: shimmerOpacity }]}>
+                    <View style={styles.skeletonRecipeCardBody}>
+                        <Animated.View style={[styles.skeletonRecipeIcon, { transform: [{ scale: pulseAnim }] }]}>
+                            <Ionicons name="fast-food-outline" size={22} color="#CBD5F5" />
+                        </Animated.View>
+                        <View style={styles.skeletonRecipeInfo}>
+                            <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeTitle, { opacity: shimmerOpacity }]} />
+                            <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeTitleShort, { opacity: shimmerOpacity }]} />
+                            <View style={styles.skeletonRecipeMeta}>
+                                <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeMetaItem, { opacity: shimmerOpacity }]} />
+                                <Animated.View style={[styles.skeletonLine, styles.skeletonRecipeIngredients, { opacity: shimmerOpacity }]} />
+                            </View>
+                            <View style={styles.skeletonRecipeTags}>
+                                <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+                                <Animated.View style={[styles.skeletonTag, { opacity: shimmerOpacity }]} />
+                            </View>
+                        </View>
+                    </View>
+                    <Animated.View style={[styles.skeletonHeartButton, { opacity: shimmerOpacity }]} />
+                </Animated.View>
+            ))}
         </View>
     );
-}
+};
 
 export default function RecipesScreen() {
     const router = useRouter();
@@ -456,7 +510,7 @@ export default function RecipesScreen() {
                         renderItem={renderRecipeCard}
                         ListEmptyComponent={() =>
                             (loadingAll && allRecipes.length === 0) || searchingAll
-                                ? <ForkKnifeLoading />
+                                ? <RecipeLoadingSkeleton />
                                 : renderAllEmpty()
                         }
                         contentContainerStyle={styles.listContentContainer}
@@ -469,7 +523,7 @@ export default function RecipesScreen() {
                         renderItem={renderRecipeCard}
                         ListEmptyComponent={() =>
                             loadingFavorites && !favoritesLoaded
-                                ? <ForkKnifeLoading />
+                                ? <RecipeLoadingSkeleton />
                                 : renderFavoritesEmpty()
                         }
                         contentContainerStyle={styles.listContentContainer}
@@ -503,7 +557,7 @@ const styles = StyleSheet.create({
     heroCard: {
         backgroundColor: '#256D85',
         borderRadius: 28,
-        padding: 20,
+        padding: 16,
         shadowColor: 'rgba(89, 147, 170, 0.35)',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.3,
@@ -511,26 +565,26 @@ const styles = StyleSheet.create({
         elevation: 8,
     },
     heroIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: 'rgba(255,255,255,0.22)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 12,
+        marginBottom: 10,
     },
     heroTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '800',
         color: '#FFFFFF',
-        marginBottom: 8,
+        marginBottom: 6,
         letterSpacing: -0.4,
     },
     heroSubtitle: {
-        fontSize: 15,
+        fontSize: 14,
         color: 'rgba(255,255,255,0.85)',
-        lineHeight: 20,
-        marginBottom: 16,
+        lineHeight: 19,
+        marginBottom: 12,
     },
     heroButton: {
         flexDirection: 'row',
@@ -654,21 +708,90 @@ const styles = StyleSheet.create({
         flex: 1,
         lineHeight: 18,
     },
-    loadingContainer: {
+    // Recipe Loading Skeleton Styles
+    skeletonRecipeCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 18,
+        marginBottom: 14,
+        shadowColor: 'rgba(15, 23, 42, 0.08)',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        elevation: 6,
+        borderWidth: 1,
+        borderColor: '#EEF2FF',
+    },
+    skeletonRecipeCardBody: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 16,
+    },
+    skeletonRecipeIcon: {
+        width: 54,
+        height: 54,
+        borderRadius: 16,
+        backgroundColor: '#E2F9EE',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 48,
+        marginRight: 18,
+        borderWidth: 2,
+        borderColor: '#D1FAE5',
     },
-    loadingIcon: {
+    skeletonRecipeInfo: {
+        flex: 1,
+    },
+    skeletonLine: {
+        backgroundColor: '#E2E8F0',
+        borderRadius: 6,
+    },
+    skeletonRecipeTitle: {
+        width: '85%',
+        height: 18,
+        marginBottom: 8,
+        borderRadius: 4,
+    },
+    skeletonRecipeTitleShort: {
+        width: '60%',
+        height: 18,
+        marginBottom: 12,
+        borderRadius: 4,
+    },
+    skeletonRecipeMeta: {
+        flexDirection: 'row',
+        gap: 16,
+        marginBottom: 8,
+    },
+    skeletonRecipeMetaItem: {
+        width: 70,
+        height: 14,
+        borderRadius: 4,
+    },
+    skeletonRecipeIngredients: {
+        width: 100,
+        height: 14,
+        borderRadius: 4,
+    },
+    skeletonRecipeTags: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+    },
+    skeletonTag: {
+        width: 60,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#E2E8F0',
+    },
+    skeletonHeartButton: {
         width: 44,
         height: 44,
-        tintColor: '#6DA98C',
-        marginBottom: 12,
-    },
-    loadingText: {
-        color: '#6DA98C',
-        fontSize: 16,
-        fontWeight: '600',
+        borderRadius: 22,
+        backgroundColor: '#E2E8F0',
     },
     listContentContainer: {
         paddingHorizontal: 20,

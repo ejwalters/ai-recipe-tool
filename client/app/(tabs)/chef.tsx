@@ -132,18 +132,123 @@ export default function ChefScreen() {
         }
     };
 
-    if (loading && !searching) {
+    // Chef Loading Skeleton Component
+    const ChefLoadingSkeleton = () => {
+        const pulseAnim = useRef(new Animated.Value(1)).current;
+        const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+        useEffect(() => {
+            // Pulsing animation for icons
+            const pulseLoop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.05,
+                        duration: 800,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 800,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+
+            // Shimmer animation for skeleton lines
+            const shimmerLoop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(shimmerAnim, {
+                        toValue: 1,
+                        duration: 1200,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(shimmerAnim, {
+                        toValue: 0,
+                        duration: 1200,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+
+            pulseLoop.start();
+            shimmerLoop.start();
+
+            return () => {
+                pulseLoop.stop();
+                shimmerLoop.stop();
+            };
+        }, []);
+
+        const shimmerOpacity = shimmerAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.3, 0.7],
+        });
+
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
-                <View style={styles.loadingContainer}>
-                    <Animated.Image
-                        source={require('../../assets/images/fork-knife.png')}
-                        style={[styles.loadingIcon, { transform: [{ scale: pulseAnim }] }]}
-                    />
-                    <CustomText style={styles.loadingText}>Loading your chats...</CustomText>
+                {/* Header Skeleton */}
+                <View style={styles.headerBg}>
+                    <View style={styles.headerRow}>
+                        <CustomText style={styles.logoText}>🤖</CustomText>
+                        <View style={{ flex: 1 }} />
+                        <Ionicons name="sparkles" size={24} color="#6DA98C" />
+                    </View>
+                    <CustomText style={styles.headerTitle}>AI Chef</CustomText>
+                    <CustomText style={styles.headerSubtitle}>Your cooking conversations</CustomText>
+                </View>
+
+                {/* Main Content Skeleton */}
+                <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
+                    {/* Search Bar Skeleton */}
+                    <View style={styles.searchBarWrapper}>
+                        <Animated.View style={[styles.skeletonSearchBar, { opacity: shimmerOpacity }]} />
+                    </View>
+
+                    {/* Start New Chat Button Skeleton */}
+                    <View style={styles.newChatContainer}>
+                        <Animated.View style={[styles.skeletonNewChatButton, { opacity: shimmerOpacity }]}>
+                            <Animated.View style={[styles.skeletonNewChatIcon, { transform: [{ scale: pulseAnim }] }]}>
+                                <Ionicons name="add" size={20} color="#CBD5F5" />
+                            </Animated.View>
+                            <View style={styles.skeletonNewChatText}>
+                                <Animated.View style={[styles.skeletonLine, styles.skeletonNewChatTitle, { opacity: shimmerOpacity }]} />
+                                <Animated.View style={[styles.skeletonLine, styles.skeletonNewChatDesc, { opacity: shimmerOpacity }]} />
+                            </View>
+                        </Animated.View>
+                    </View>
+
+                    {/* Chat History Skeleton */}
+                    <View style={styles.chatHistoryContainer}>
+                        <View style={styles.sectionHeader}>
+                            <CustomText style={styles.sectionTitle}>Recent Conversations</CustomText>
+                            <Animated.View style={[styles.skeletonLine, styles.skeletonChatCount, { opacity: shimmerOpacity }]} />
+                        </View>
+
+                        <View style={styles.listContent}>
+                            {[1, 2, 3, 4].map((i) => (
+                                <Animated.View key={i} style={[styles.skeletonChatCard, { opacity: shimmerOpacity }]}>
+                                    <View style={styles.skeletonChatCardContent}>
+                                        <View style={styles.skeletonChatCardHeader}>
+                                            <Animated.View style={[styles.skeletonChatCardIcon, { transform: [{ scale: pulseAnim }] }]}>
+                                                <Ionicons name="chatbubble-ellipses" size={18} color="#CBD5F5" />
+                                            </Animated.View>
+                                            <View style={styles.skeletonChatCardInfo}>
+                                                <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardTitle, { opacity: shimmerOpacity }]} />
+                                                <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardDate, { opacity: shimmerOpacity }]} />
+                                            </View>
+                                        </View>
+                                    </View>
+                                </Animated.View>
+                            ))}
+                        </View>
+                    </View>
                 </View>
             </SafeAreaView>
         );
+    };
+
+    if (loading && !searching) {
+        return <ChefLoadingSkeleton />;
     }
 
     if (!userId) {
@@ -283,22 +388,106 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
+    // Chef Loading Skeleton Styles
+    skeletonLine: {
+        backgroundColor: '#E2E8F0',
+        borderRadius: 6,
+    },
+    skeletonSearchBar: {
+        backgroundColor: '#fff',
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        height: 54,
+        width: '92%',
+        marginTop: 8,
+    },
+    skeletonNewChatButton: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
+        flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3F0FF',
     },
-    loadingIcon: {
-        width: 48,
-        height: 48,
-        tintColor: '#6DA98C',
-        marginBottom: 16,
+    skeletonNewChatIcon: {
+        backgroundColor: '#E2F9EE',
+        borderRadius: 12,
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+        borderWidth: 2,
+        borderColor: '#D1FAE5',
     },
-    loadingText: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
+    skeletonNewChatText: {
+        flex: 1,
+    },
+    skeletonNewChatTitle: {
+        width: '70%',
+        height: 18,
+        marginBottom: 8,
+        borderRadius: 4,
+    },
+    skeletonNewChatDesc: {
+        width: '50%',
+        height: 14,
+        borderRadius: 4,
+    },
+    skeletonChatCount: {
+        width: 60,
+        height: 16,
+        borderRadius: 4,
+    },
+    skeletonChatCard: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    skeletonChatCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+    },
+    skeletonChatCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    skeletonChatCardIcon: {
+        backgroundColor: '#E2F9EE',
+        borderRadius: 10,
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+        borderWidth: 2,
+        borderColor: '#D1FAE5',
+    },
+    skeletonChatCardInfo: {
+        flex: 1,
+    },
+    skeletonChatCardTitle: {
+        width: '85%',
+        height: 16,
+        marginBottom: 6,
+        borderRadius: 4,
+    },
+    skeletonChatCardDate: {
+        width: '50%',
+        height: 14,
+        borderRadius: 4,
     },
     authContainer: {
         alignItems: 'center',

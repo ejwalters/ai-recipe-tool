@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "AI Recipe Tool",
+    "slug": "ai-recipe-tool",
+    "scheme": "airecipetool",
+    "ios": { "bundleIdentifier": "com.ejwalters24.airecipetool" }
+  }
+}
+
