@@ -114,22 +114,170 @@ export default function ChefScreen() {
         }
     };
 
-    // Format date for display
+    // Format date for display - matches the design with times, Yesterday, and dates
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        
         const diffTime = Math.abs(now.getTime() - date.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
-        if (diffDays === 1) {
-            return 'Today';
-        } else if (diffDays === 2) {
+        // Same day - show time
+        if (dateOnly.getTime() === today.getTime()) {
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        // Yesterday
+        if (dateOnly.getTime() === yesterday.getTime()) {
             return 'Yesterday';
-        } else if (diffDays <= 7) {
-            return date.toLocaleDateString('en-US', { weekday: 'long' });
-        } else {
+        }
+        // Within a week - show date
+        if (diffDays <= 7) {
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
+        // Older - show date
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    // Get icon and color for chat card based on content analysis
+    const getChatCardIcon = (summary: string | undefined, index: number, chatId: string) => {
+        if (!summary) {
+            // Fallback for empty summaries
+            const fallbackIcons: any[] = ['restaurant-outline', 'restaurant-outline', 'leaf-outline'];
+            const fallbackColors = ['#FFE5D0', '#E6EEFF', '#E0F4E0'];
+            const fallbackIndex = index % fallbackIcons.length;
+            return {
+                icon: fallbackIcons[fallbackIndex],
+                bgColor: fallbackColors[fallbackIndex],
+                iconColor: '#FFFFFF',
+            };
+        }
+        
+        const text = summary.toLowerCase();
+        // Extract likely title (first few words, usually capitalized) for better matching
+        const words = summary.split(' ');
+        const likelyTitle = words.slice(0, 4).join(' ').toLowerCase();
+        const combinedText = `${likelyTitle} ${text}`;
+        
+        // Icon and color mappings based on content (check title first for better accuracy)
+        let icon: any = 'restaurant-outline'; // default
+        let bgColor = '#E6EEFF'; // default light blue
+        const iconColor = '#FFFFFF'; // Always white icons for contrast
+        
+        // Fish and seafood (prioritize fish icon)
+        if (/\b(salmon|fish|tuna|shrimp|seafood|crab|lobster|cod|tilapia|mackerel|sardine|anchovy|oyster|clam|mussel|trout|bass)\b/.test(combinedText)) {
+            icon = 'fish-outline';
+            bgColor = '#FFE0E6'; // light pink
+        }
+        // Pizza (specific icon)
+        else if (/\b(pizza|neapolitan|margherita|pepperoni|pizza dough)\b/.test(combinedText)) {
+            icon = 'pizza-outline';
+            bgColor = '#FFF8DC'; // light yellow
+        }
+        // Beef dishes (burgers, steaks, etc.)
+        else if (/\b(beef|burger|steak|meatball|brisket|roast|ribeye|sirloin|ground beef|hamburger)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFE5D0'; // light orange
+        }
+        // Soup and stew (often with beef or other meats)
+        else if (/\b(stew|soup|chowder|broth|bouillon|gumbo|chili)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFE5D0'; // light orange
+        }
+        // Salad and vegetables (leaf icon)
+        else if (/\b(salad|lettuce|spinach|kale|arugula|caesar|garden salad|vegetable salad)\b/.test(combinedText)) {
+            icon = 'leaf-outline';
+            bgColor = '#E0F4E0'; // light green
+        }
+        // Cabbage (specific vegetable)
+        else if (/\b(cabbage|collard|bok choy)\b/.test(combinedText)) {
+            icon = 'leaf-outline';
+            bgColor = '#E0F4E0'; // light green
+        }
+        // Vegan/vegetarian meals
+        else if (/\b(vegan|vegetarian|tofu|tempeh|plant-based|meat-free|meal prep)\b/.test(combinedText)) {
+            icon = 'leaf-outline';
+            bgColor = '#E0F4E0'; // light green
+        }
+        // Chicken and poultry
+        else if (/\b(chicken|turkey|duck|poultry|wing|breast|thigh|drumstick)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#E6EEFF'; // light blue
+        }
+        // Pasta dishes
+        else if (/\b(pasta|spaghetti|penne|fettuccine|macaroni|lasagna|ravioli|gnocchi|noodles)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#E6EEFF'; // light blue
+        }
+        // Bread and baked goods
+        else if (/\b(bread|bagel|muffin|croissant|roll|bun|dough|yeast|bake|baking)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFF8DC'; // light yellow
+        }
+        // Dessert and sweets
+        else if (/\b(dessert|cake|cookie|pie|brownie|pudding|ice cream|sweet|chocolate|sugar)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFE0E6'; // light pink
+        }
+        // Breakfast items
+        else if (/\b(breakfast|pancake|waffle|omelet|scrambled|french toast|eggs|bacon|brunch)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFF8DC'; // light yellow
+        }
+        // Curry dishes
+        else if (/\b(curry|tikka|masala|korma)\b/.test(combinedText)) {
+            icon = 'restaurant-outline';
+            bgColor = '#FFE5D0'; // light orange
+        }
+        // Fallback: use index-based selection for variety
+        else {
+            const fallbackIcons: any[] = ['restaurant-outline', 'restaurant-outline', 'leaf-outline'];
+            const fallbackColors = ['#FFE5D0', '#E6EEFF', '#E0F4E0'];
+            const fallbackIndex = index % fallbackIcons.length;
+            icon = fallbackIcons[fallbackIndex];
+            bgColor = fallbackColors[fallbackIndex];
+        }
+        
+        return {
+            icon,
+            bgColor,
+            iconColor,
+        };
+    };
+
+    // Extract recipe title from summary if it exists
+    const getChatTitle = (summary: string | undefined) => {
+        if (!summary) return 'Chat Conversation';
+        // Try to extract recipe name if summary contains one
+        const recipeMatch = summary.match(/(?:recipe|for|make)\s+([A-Z][a-zA-Z\s&]+?)(?:\.|$|,|:)/i);
+        if (recipeMatch && recipeMatch[1]) {
+            return recipeMatch[1].trim();
+        }
+        // If summary starts with a capitalized word, use first few words
+        const words = summary.split(' ');
+        if (words[0] && words[0][0] === words[0][0].toUpperCase() && words[0].length > 3) {
+            const title = words.slice(0, 3).join(' ');
+            return title.length > 40 ? title.substring(0, 40) + '...' : title;
+        }
+        // Fallback: first 30 chars
+        return summary.substring(0, 40) + (summary.length > 40 ? '...' : '');
+    };
+
+    // Get description from summary
+    const getChatDescription = (summary: string | undefined) => {
+        if (!summary) return 'Start a conversation with AI Chef';
+        // Remove the title part if it's at the start
+        const title = getChatTitle(summary);
+        if (summary.startsWith(title)) {
+            const desc = summary.substring(title.length).trim();
+            if (desc.length > 0) {
+                return desc.substring(0, 80) + (desc.length > 80 ? '...' : '');
+            }
+        }
+        return summary.substring(0, 80) + (summary.length > 80 ? '...' : '');
     };
 
     // Chef Loading Skeleton Component
@@ -185,20 +333,25 @@ export default function ChefScreen() {
         });
 
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
                 {/* Header Skeleton */}
                 <View style={styles.headerBg}>
                     <View style={styles.headerRow}>
-                        <CustomText style={styles.logoText}>🤖</CustomText>
-                        <View style={{ flex: 1 }} />
-                        <Ionicons name="sparkles" size={24} color="#6DA98C" />
+                        <View style={styles.profileIconContainer}>
+                            <CustomText style={styles.avatarEmoji}>🐕</CustomText>
+                        </View>
+                        <View style={styles.headerTitleContainer}>
+                            <CustomText style={styles.headerTitle}>AI Chef</CustomText>
+                            <CustomText style={styles.headerSubtitle}>Your cooking assistant</CustomText>
+                        </View>
+                        <View style={styles.sparkleIconContainer}>
+                            <Ionicons name="sparkles" size={20} color="#6B7280" />
+                        </View>
                     </View>
-                    <CustomText style={styles.headerTitle}>AI Chef</CustomText>
-                    <CustomText style={styles.headerSubtitle}>Your cooking conversations</CustomText>
                 </View>
 
                 {/* Main Content Skeleton */}
-                <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
+                <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
                     {/* Search Bar Skeleton */}
                     <View style={styles.searchBarWrapper}>
                         <Animated.View style={[styles.skeletonSearchBar, { opacity: shimmerOpacity }]} />
@@ -208,38 +361,39 @@ export default function ChefScreen() {
                     <View style={styles.newChatContainer}>
                         <Animated.View style={[styles.skeletonNewChatButton, { opacity: shimmerOpacity }]}>
                             <Animated.View style={[styles.skeletonNewChatIcon, { transform: [{ scale: pulseAnim }] }]}>
-                                <Ionicons name="add" size={20} color="#CBD5F5" />
+                                <Ionicons name="add" size={28} color="#FFFFFF" />
                             </Animated.View>
                             <View style={styles.skeletonNewChatText}>
                                 <Animated.View style={[styles.skeletonLine, styles.skeletonNewChatTitle, { opacity: shimmerOpacity }]} />
                                 <Animated.View style={[styles.skeletonLine, styles.skeletonNewChatDesc, { opacity: shimmerOpacity }]} />
                             </View>
+                            <View style={styles.skeletonNewChatArrowContainer} />
                         </Animated.View>
                     </View>
 
                     {/* Chat History Skeleton */}
                     <View style={styles.chatHistoryContainer}>
                         <View style={styles.sectionHeader}>
-                            <CustomText style={styles.sectionTitle}>Recent Conversations</CustomText>
+                            <CustomText style={styles.sectionTitle}>Recent History</CustomText>
                             <Animated.View style={[styles.skeletonLine, styles.skeletonChatCount, { opacity: shimmerOpacity }]} />
                         </View>
 
                         <View style={styles.listContent}>
-                            {[1, 2, 3, 4].map((i) => (
-                                <Animated.View key={i} style={[styles.skeletonChatCard, { opacity: shimmerOpacity }]}>
-                                    <View style={styles.skeletonChatCardContent}>
-                                        <View style={styles.skeletonChatCardHeader}>
-                                            <Animated.View style={[styles.skeletonChatCardIcon, { transform: [{ scale: pulseAnim }] }]}>
-                                                <Ionicons name="chatbubble-ellipses" size={18} color="#CBD5F5" />
-                                            </Animated.View>
-                                            <View style={styles.skeletonChatCardInfo}>
-                                                <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardTitle, { opacity: shimmerOpacity }]} />
-                                                <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardDate, { opacity: shimmerOpacity }]} />
-                                            </View>
+                            {[1, 2, 3, 4].map((i) => {
+                                const iconData = getChatCardIcon(undefined, i, `skeleton-${i}`);
+                                return (
+                                    <Animated.View key={i} style={[styles.skeletonChatCard, { opacity: shimmerOpacity }]}>
+                                        <Animated.View style={[styles.skeletonChatCardIcon, { backgroundColor: iconData.bgColor, transform: [{ scale: pulseAnim }] }]}>
+                                            <Ionicons name={iconData.icon} size={22} color={iconData.iconColor} />
+                                        </Animated.View>
+                                        <View style={styles.skeletonChatCardInfo}>
+                                            <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardTitle, { opacity: shimmerOpacity }]} />
+                                            <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardDescription, { opacity: shimmerOpacity }]} />
                                         </View>
-                                    </View>
-                                </Animated.View>
-                            ))}
+                                        <Animated.View style={[styles.skeletonLine, styles.skeletonChatCardTimestamp, { opacity: shimmerOpacity }]} />
+                                    </Animated.View>
+                                );
+                            })}
                         </View>
                     </View>
                 </View>
@@ -253,7 +407,7 @@ export default function ChefScreen() {
 
     if (!userId) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
                 <View style={styles.container}>
                     <View style={styles.authContainer}>
                         <Ionicons name="lock-closed" size={48} color="#6DA98C" />
@@ -265,35 +419,33 @@ export default function ChefScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
             {/* Header */}
             <View style={styles.headerBg}>
                 <View style={styles.headerRow}>
-                    <CustomText style={styles.logoText}>🤖</CustomText>
-                    <View style={{ flex: 1 }} />
-                    <Ionicons name="sparkles" size={24} color="#6DA98C" />
+                    <View style={styles.profileIconContainer}>
+                        <CustomText style={styles.avatarEmoji}>🐕</CustomText>
+                    </View>
+                    <View style={styles.headerTitleContainer}>
+                        <CustomText style={styles.headerTitle}>AI Chef</CustomText>
+                        <CustomText style={styles.headerSubtitle}>Your cooking assistant</CustomText>
+                    </View>
+                    <TouchableOpacity style={styles.sparkleIconContainer}>
+                        <Ionicons name="sparkles" size={20} color="#6B7280" />
+                    </TouchableOpacity>
                 </View>
-                <CustomText style={styles.headerTitle}>AI Chef</CustomText>
-                <CustomText style={styles.headerSubtitle}>Your cooking conversations</CustomText>
             </View>
 
             {/* Main Content */}
-            <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
                 {/* Floating Search Bar */}
                 <View style={styles.searchBarWrapper}>
                     <View style={styles.searchBar}>
-                        {searching ? (
-                            <Animated.Image
-                                source={require('../../assets/images/fork-knife.png')}
-                                style={[styles.searchIcon, { transform: [{ scale: pulseAnim }] }]}
-                            />
-                        ) : (
-                            <Ionicons name="search" size={22} color="#B0B0B0" style={styles.searchIcon} />
-                        )}
+                        <Ionicons name="search" size={22} color="#9CA3AF" style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search your chat history..."
-                            placeholderTextColor="#B0B0B0"
+                            placeholder="Search recipes, ingredients..."
+                            placeholderTextColor="#9CA3AF"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
@@ -313,15 +465,15 @@ export default function ChefScreen() {
                         onPress={() => openChatFromRef(startChatRef)}
                         activeOpacity={0.92}
                     >
-                        <View style={styles.newChatContent}>
-                            <View style={styles.newChatIcon}>
-                                <Ionicons name="add" size={24} color="#fff" />
-                            </View>
-                            <View style={styles.newChatText}>
-                                <CustomText style={styles.newChatTitle}>Start New Chat</CustomText>
-                                <CustomText style={styles.newChatDesc}>Ask AI Chef for recipe ideas</CustomText>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6DA98C" />
+                        <View style={styles.newChatIcon}>
+                            <Ionicons name="add" size={28} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.newChatText}>
+                            <CustomText style={styles.newChatTitle}>New Recipe Chat</CustomText>
+                            <CustomText style={styles.newChatDesc}>Ask for ideas or instructions</CustomText>
+                        </View>
+                        <View style={styles.newChatArrowContainer}>
+                            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -329,38 +481,36 @@ export default function ChefScreen() {
                 {/* Chat History */}
                 <View style={styles.chatHistoryContainer}>
                     <View style={styles.sectionHeader}>
-                        <CustomText style={styles.sectionTitle}>Recent Conversations</CustomText>
+                        <CustomText style={styles.sectionTitle}>Recent History</CustomText>
                         <CustomText style={styles.chatCount}>{chats.length} chats</CustomText>
                     </View>
                     
                     <FlatList
                         data={chats}
                         keyExtractor={item => item.id}
-                        renderItem={({ item, index }) => (
-                            <TouchableOpacity
-                                ref={el => { chatBtnRefs.current[index] = el; }}
-                                style={styles.chatCard}
-                                onPress={() => openChatFromRef(chatBtnRefs.current[index], item.id)}
-                                activeOpacity={0.92}
-                            >
-                                <View style={styles.chatCardContent}>
-                                    <View style={styles.chatCardHeader}>
-                                        <View style={styles.chatCardIcon}>
-                                            <Ionicons name="chatbubble-ellipses" size={20} color="#6DA98C" />
-                                        </View>
-                                        <View style={styles.chatCardInfo}>
-                                            <CustomText style={styles.chatCardTitle}>
-                                                {item.summary ? item.summary.substring(0, 50) + (item.summary.length > 50 ? '...' : '') : 'Chat Conversation'}
-                                            </CustomText>
-                                            <CustomText style={styles.chatCardDate}>
-                                                {item.created_at ? formatDate(item.created_at) : 'Unknown date'}
-                                            </CustomText>
-                                        </View>
+                        renderItem={({ item, index }) => {
+                            const iconData = getChatCardIcon(item.summary, index, item.id);
+                            const title = getChatTitle(item.summary);
+                            const description = getChatDescription(item.summary);
+                            const timestamp = item.created_at ? formatDate(item.created_at) : '';
+                            return (
+                                <TouchableOpacity
+                                    ref={el => { chatBtnRefs.current[index] = el; }}
+                                    style={styles.chatCard}
+                                    onPress={() => openChatFromRef(chatBtnRefs.current[index], item.id)}
+                                    activeOpacity={0.92}
+                                >
+                                    <View style={[styles.chatCardIcon, { backgroundColor: iconData.bgColor }]}>
+                                        <Ionicons name={iconData.icon} size={22} color={iconData.iconColor} />
                                     </View>
-                                    <Ionicons name="chevron-forward" size={16} color="#B0B0B0" />
-                                </View>
-                            </TouchableOpacity>
-                        )}
+                                    <View style={styles.chatCardInfo}>
+                                        <CustomText style={styles.chatCardTitle}>{title}</CustomText>
+                                        <CustomText style={styles.chatCardDescription}>{description}</CustomText>
+                                    </View>
+                                    <CustomText style={styles.chatCardTimestamp}>{timestamp}</CustomText>
+                                </TouchableOpacity>
+                            );
+                        }}
                         contentContainerStyle={styles.listContent}
                         showsVerticalScrollIndicator={false}
                         ListEmptyComponent={
@@ -404,29 +554,38 @@ const styles = StyleSheet.create({
     },
     skeletonNewChatButton: {
         backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
+        borderRadius: 12,
         flexDirection: 'row',
         alignItems: 'center',
+        overflow: 'hidden',
+        shadowColor: '#9CA3AF',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     skeletonNewChatIcon: {
-        backgroundColor: '#E2F9EE',
-        borderRadius: 12,
-        width: 40,
-        height: 40,
+        backgroundColor: '#4CAF50',
+        width: 64,
+        height: 64,
+        borderTopLeftRadius: 12,
+        borderBottomLeftRadius: 12,
+        borderTopRightRadius: 10,
+        borderBottomRightRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 16,
-        borderWidth: 2,
-        borderColor: '#D1FAE5',
     },
     skeletonNewChatText: {
         flex: 1,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+    },
+    skeletonNewChatArrowContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        marginRight: 16,
     },
     skeletonNewChatTitle: {
         width: '70%',
@@ -448,35 +607,26 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 16,
         marginBottom: 12,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.06,
         shadowRadius: 4,
         elevation: 1,
     },
-    skeletonChatCardContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-    },
-    skeletonChatCardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
     skeletonChatCardIcon: {
-        backgroundColor: '#E2F9EE',
+        width: 50,
+        height: 50,
         borderRadius: 10,
-        width: 36,
-        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
-        borderWidth: 2,
-        borderColor: '#D1FAE5',
+        marginRight: 14,
     },
     skeletonChatCardInfo: {
         flex: 1,
+        minWidth: 0,
     },
     skeletonChatCardTitle: {
         width: '85%',
@@ -484,10 +634,16 @@ const styles = StyleSheet.create({
         marginBottom: 6,
         borderRadius: 4,
     },
-    skeletonChatCardDate: {
-        width: '50%',
+    skeletonChatCardDescription: {
+        width: '70%',
         height: 14,
         borderRadius: 4,
+    },
+    skeletonChatCardTimestamp: {
+        width: 50,
+        height: 14,
+        borderRadius: 4,
+        marginLeft: 8,
     },
     authContainer: {
         alignItems: 'center',
@@ -502,68 +658,87 @@ const styles = StyleSheet.create({
         lineHeight: 24,
     },
     headerBg: {
-        backgroundColor: '#F3F0FF',
-        paddingTop: Platform.OS === 'ios' ? 48 : 32,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+        backgroundColor: '#FFFFFF',
+        paddingTop: Platform.OS === 'ios' ? 56 : 40,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
     },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
     },
-    logoText: {
+    profileIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#E8F5E9',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarEmoji: {
         fontSize: 28,
-        fontWeight: '800',
-        color: '#222',
-        letterSpacing: 0.5,
+        lineHeight: 32,
+    },
+    headerTitleContainer: {
+        flex: 1,
+        marginLeft: 16,
+    },
+    sparkleIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F5F5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#FFFFFF',
     },
     headerTitle: {
-        fontSize: 26,
+        fontSize: 30,
         fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
+        color: '#1F2937',
         letterSpacing: -0.5,
+        lineHeight: 36,
     },
     headerSubtitle: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
+        fontSize: 15,
+        color: '#9CA3AF',
+        fontWeight: '400',
         marginTop: 2,
-        marginBottom: 8,
+        lineHeight: 20,
     },
     searchBarWrapper: {
         alignItems: 'center',
-        marginTop: -28,
-        marginBottom: 18,
+        marginTop: 20,
+        marginBottom: 20,
         zIndex: 10,
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        paddingHorizontal: 18,
-        height: 54,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 0,
+        paddingHorizontal: 16,
+        height: 50,
         width: '92%',
-        marginTop: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     searchIcon: {
-        marginRight: 10,
-        width: 22,
-        height: 22,
-        tintColor: '#B0B0B0',
+        marginRight: 12,
+        width: 20,
+        height: 20,
+        tintColor: '#9CA3AF',
     },
     searchInput: {
         flex: 1,
-        fontSize: 17,
-        fontWeight: '500',
-        color: '#222',
+        fontSize: 16,
+        fontWeight: '400',
+        color: '#1F2937',
         fontFamily: 'System',
         paddingVertical: 0,
     },
@@ -572,111 +747,136 @@ const styles = StyleSheet.create({
         padding: 2,
     },
     newChatContainer: {
-        paddingHorizontal: 18,
+        paddingHorizontal: 20,
         marginBottom: 24,
     },
     newChatButton: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    newChatContent: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
         flexDirection: 'row',
         alignItems: 'center',
+        overflow: 'hidden',
+        shadowColor: '#9CA3AF',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     newChatIcon: {
-        backgroundColor: '#6DA98C',
-        borderRadius: 12,
+        backgroundColor: '#4CAF50',
         width: 40,
         height: 40,
+        borderTopLeftRadius: 12,
+        borderBottomLeftRadius: 12,
+        borderTopRightRadius: 10,
+        borderBottomRightRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    newChatText: {
+        flex: 1,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+    },
+    newChatTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 2,
+        letterSpacing: -0.2,
+    },
+    newChatDesc: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '400',
+        letterSpacing: -0.1,
+        lineHeight: 18,
+    },
+    newChatArrowContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
     },
-    newChatText: {
-        flex: 1,
-    },
-    newChatTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
-        marginBottom: 2,
-    },
-    newChatDesc: {
-        fontSize: 14,
-        color: '#6B7280',
-        fontWeight: '500',
-    },
     chatHistoryContainer: {
         flex: 1,
-        paddingHorizontal: 18,
+        paddingHorizontal: 20,
     },
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 18,
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: '#222',
+        color: '#1F2937',
+        letterSpacing: -0.3,
     },
     chatCount: {
         fontSize: 14,
-        color: '#6B7280',
-        fontWeight: '500',
+        color: '#4CAF50',
+        fontWeight: '600',
     },
     listContent: {
         paddingBottom: 24,
     },
     chatCard: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
         marginBottom: 12,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.05,
         shadowRadius: 4,
-        elevation: 1,
-    },
-    chatCardContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-    },
-    chatCardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
+        elevation: 2,
     },
     chatCardIcon: {
-        backgroundColor: '#F0F9F4',
+        width: 50,
+        height: 50,
         borderRadius: 10,
-        width: 36,
-        height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        marginRight: 14,
     },
     chatCardInfo: {
         flex: 1,
+        minWidth: 0,
     },
     chatCardTitle: {
         fontSize: 16,
-        fontWeight: '600',
-        color: '#222',
-        marginBottom: 2,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 4,
+        letterSpacing: -0.2,
+        lineHeight: 22,
     },
-    chatCardDate: {
-        fontSize: 14,
+    chatCardDescription: {
+        fontSize: 13,
         color: '#6B7280',
+        fontWeight: '400',
+        lineHeight: 18,
+        letterSpacing: -0.1,
+    },
+    chatCardTimestamp: {
+        fontSize: 12,
+        color: '#9CA3AF',
         fontWeight: '500',
+        marginLeft: 12,
+        minWidth: 60,
+        textAlign: 'right',
     },
     emptyContainer: {
         alignItems: 'center',

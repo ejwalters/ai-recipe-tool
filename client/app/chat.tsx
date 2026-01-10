@@ -686,33 +686,6 @@ export default function ChatScreen() {
                 ]}
             >
                 <View style={styles.inputContainer}>
-                    {/* Suggestion Tags */}
-                    <View style={styles.suggestionTagsContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionTagsContent}>
-                            <TouchableOpacity 
-                                style={styles.suggestionTag}
-                                onPress={() => setMessage('Show me healthy options')}
-                            >
-                                <Ionicons name="checkbox-outline" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
-                                <CustomText style={styles.suggestionTagText}>Healthy options</CustomText>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.suggestionTag}
-                                onPress={() => setMessage('Quick meals')}
-                            >
-                                <Ionicons name="flash" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
-                                <CustomText style={styles.suggestionTagText}>Quick meals</CustomText>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.suggestionTag}
-                                onPress={() => setMessage('Vegetarian recipes')}
-                            >
-                                <Ionicons name="leaf-outline" size={16} color={PALETTE.suggestionTagText} style={{ marginRight: 6 }} />
-                                <CustomText style={styles.suggestionTagText}>Vegetarian</CustomText>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                    
                     {/* Input Box */}
                     <View style={styles.inputBox}>
                         <TextInput

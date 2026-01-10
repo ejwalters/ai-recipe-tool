@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  SafeAreaView,
   StyleSheet,
   View,
   TouchableOpacity,
@@ -12,6 +11,7 @@ import {
   Image,
   Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +44,9 @@ type UserResult = {
   username?: string | null;
   avatar_url?: string | null;
   is_following?: boolean;
+  follower_count?: number | null;
+  recipe_count?: number | null;
+  profession?: string | null;
 };
 
 const SEGMENTS: Array<{ id: 'feed' | 'discover'; label: string }> = [
@@ -72,9 +75,7 @@ const UserAvatar = ({
     width: size,
     height: size,
     borderRadius: size / 2,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 2.5,
-    borderColor: '#D1FAE5',
+    backgroundColor: '#F3F4F6',
     overflow: 'hidden' as const,
   };
 
@@ -90,7 +91,7 @@ const UserAvatar = ({
   }
   return (
     <View style={[avatarStyle, { alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Ionicons name="person" size={size * 0.55} color="#4F9E7A" />
+      <Ionicons name="person" size={size * 0.55} color="#9CA3AF" />
     </View>
   );
 };
@@ -153,11 +154,12 @@ const DiscoverLoadingSkeleton = () => {
         <Animated.View key={i} style={[styles.skeletonUserRow, { opacity: shimmerOpacity }]}>
           <View style={styles.skeletonUserInfo}>
             <Animated.View style={[styles.skeletonUserAvatar, { transform: [{ scale: pulseAnim }] }]}>
-              <Ionicons name="person" size={28} color="#CBD5F5" />
+              <Ionicons name="person" size={32} color="#D1D5DB" />
             </Animated.View>
             <View style={styles.skeletonUserDetails}>
               <Animated.View style={[styles.skeletonLine, styles.skeletonUserName, { opacity: shimmerOpacity }]} />
               <Animated.View style={[styles.skeletonLine, styles.skeletonUserHandle, { opacity: shimmerOpacity }]} />
+              <Animated.View style={[styles.skeletonLine, styles.skeletonUserStats, { opacity: shimmerOpacity }]} />
             </View>
           </View>
           <Animated.View style={[styles.skeletonFollowButton, { opacity: shimmerOpacity }]} />
@@ -277,7 +279,7 @@ export default function SocialScreen() {
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSearchedRef = useRef(false); // Track if user has performed at least one search
 
   const loadFeed = useCallback(async (isInitial = false) => {
@@ -595,6 +597,20 @@ export default function SocialScreen() {
 
   const renderUserRow = useCallback(
     ({ item }: { item: UserResult }) => {
+      const formatNumber = (num: number | null | undefined) => {
+        if (!num && num !== 0) return '0';
+        if (num >= 1000) {
+          return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        }
+        return num.toString();
+      };
+
+      const displayName = item.display_name || item.username || 'New Chef';
+      const username = item.username || 'chef';
+      const profession = item.profession || null;
+      const followerCount = formatNumber(item.follower_count);
+      const recipeCount = formatNumber(item.recipe_count);
+
       return (
         <TouchableOpacity
           style={styles.userRow}
@@ -602,12 +618,21 @@ export default function SocialScreen() {
           onPress={() => router.push({ pathname: '/user-profile', params: { user_id: item.id } })}
         >
           <View style={styles.userInfo}>
-            <UserAvatar avatarUrl={item.avatar_url} size={56} />
+            <UserAvatar avatarUrl={item.avatar_url} size={64} />
             <View style={styles.userDetails}>
-              <CustomText style={styles.userName}>
-                {item.display_name || item.username || 'New Chef'}
+              <CustomText style={styles.userName}>{displayName}</CustomText>
+              <CustomText style={styles.userHandle}>
+                @{username}{profession ? ` · ${profession}` : ''}
               </CustomText>
-              <CustomText style={styles.userHandle}>@{item.username || 'chef'}</CustomText>
+              <View style={styles.userStats}>
+                <CustomText style={styles.userStatText}>
+                  {followerCount} Followers
+                </CustomText>
+                <CustomText style={styles.userStatDivider}> · </CustomText>
+                <CustomText style={styles.userStatText}>
+                  {recipeCount} Recipes
+                </CustomText>
+              </View>
             </View>
           </View>
           <TouchableOpacity
@@ -636,17 +661,49 @@ export default function SocialScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <CustomText style={styles.headerTitle}>Community Kitchen</CustomText>
-        <CustomText style={styles.headerSubtitle}>
-          Follow friends, swap favorites, and see what’s cooking.
-        </CustomText>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTitleContainer}>
+            <CustomText style={styles.headerTitle}>Community Kitchen</CustomText>
+            <CustomText style={styles.headerTagline}>Connect. Cook. Share.</CustomText>
+          </View>
+          <TouchableOpacity style={styles.bellIconButton}>
+            <Ionicons name="notifications-outline" size={24} color="#1F2937" />
+          </TouchableOpacity>
+        </View>
+
+        {activeSegment === 'discover' && (
+          <View style={styles.headerSearchBar}>
+            <Ionicons name="search" size={20} color="#9CA3AF" />
+            <TextInput
+              style={styles.headerSearchInput}
+              placeholder="Search chefs and food lovers..."
+              placeholderTextColor="#9CA3AF"
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {!!searchTerm && (
+              <TouchableOpacity onPress={() => setSearchTerm('')}>
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         <View style={styles.segmentContainer}>
-          {SEGMENTS.map(segment => {
+          {SEGMENTS.map((segment, index) => {
             const isActive = segment.id === activeSegment;
             return (
               <TouchableOpacity
                 key={segment.id}
-                style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
+                style={[
+                  styles.segmentButton,
+                  isActive && styles.segmentButtonActive,
+                  index === 0 && styles.segmentButtonFirst,
+                  index === SEGMENTS.length - 1 && styles.segmentButtonLast,
+                ]}
                 onPress={() => setActiveSegment(segment.id)}
                 activeOpacity={0.85}
               >
@@ -684,25 +741,6 @@ export default function SocialScreen() {
         </View>
       ) : (
         <View style={styles.discoverContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#94A3B8" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Find friends by name or username"
-              placeholderTextColor="#9CA3AF"
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-            {!!searchTerm && (
-              <TouchableOpacity onPress={() => setSearchTerm('')}>
-                <Ionicons name="close-circle" size={20} color="#CBD5F5" />
-              </TouchableOpacity>
-            )}
-          </View>
-
           {searchError && (
             <CustomText style={styles.errorText}>{searchError}</CustomText>
           )}
@@ -726,7 +764,7 @@ export default function SocialScreen() {
               ListEmptyComponent={
                 searching ? (
                   <View style={styles.emptyState}>
-                    <ActivityIndicator size="small" color="#4F9E7A" />
+                    <ActivityIndicator size="small" color="#4CAF50" />
                     <CustomText style={[styles.emptyText, { marginTop: 16 }]}>
                       Searching...
                     </CustomText>
@@ -752,57 +790,104 @@ export default function SocialScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F4F5FB',
+    backgroundColor: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  headerTitleContainer: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#101828',
+    color: '#1F2937',
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    marginTop: 6,
+  headerTagline: {
+    marginTop: 4,
     fontSize: 15,
-    color: '#475467',
-    lineHeight: 20,
+    color: '#6B7280',
+    fontWeight: '400',
+    letterSpacing: 0.2,
+  },
+  bellIconButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  headerSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 44,
+    marginBottom: 16,
+    gap: 12,
+  },
+  headerSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '400',
   },
   segmentContainer: {
-    marginTop: 20,
     flexDirection: 'row',
-    backgroundColor: '#E5EBF8',
-    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
     padding: 4,
+    gap: 0,
+    marginTop: 16,
   },
   segmentButton: {
     flex: 1,
-    borderRadius: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: 'transparent',
   },
   segmentButtonActive: {
     backgroundColor: '#FFFFFF',
-    shadowColor: 'rgba(0,0,0,0.08)',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  segmentButtonFirst: {
+    marginRight: 0,
+  },
+  segmentButtonLast: {
+    marginLeft: 0,
   },
   segmentLabel: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '500',
+    color: '#9CA3AF',
   },
   segmentLabelActive: {
-    color: '#256D85',
+    color: '#1F2937',
+    fontWeight: '700',
   },
   feedContainer: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
+    backgroundColor: '#FFFFFF',
   },
   listContent: {
     paddingBottom: 32,
@@ -972,46 +1057,23 @@ const styles = StyleSheet.create({
   discoverContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingTop: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    height: 52,
-    gap: 12,
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
-    marginBottom: 4,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#1F2937',
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
+    paddingVertical: 20,
     paddingHorizontal: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     marginBottom: 12,
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userInfo: {
     flexDirection: 'row',
@@ -1024,47 +1086,57 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 6,
-    letterSpacing: -0.3,
-    lineHeight: 24,
+    color: '#1F2937',
+    marginBottom: 4,
+    letterSpacing: -0.2,
+    lineHeight: 22,
   },
   userHandle: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-    letterSpacing: 0.1,
+    color: '#6B7280',
+    fontWeight: '400',
+    marginBottom: 6,
+    letterSpacing: -0.1,
+  },
+  userStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userStatText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '400',
+  },
+  userStatDivider: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    marginHorizontal: 4,
   },
   followButton: {
     paddingHorizontal: 24,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#4F9E7A',
-    shadowColor: 'rgba(79, 158, 122, 0.25)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: '#4CAF50',
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   followButtonActive: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
-    borderColor: '#4F9E7A',
-    shadowColor: 'transparent',
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   followButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   followButtonTextActive: {
-    color: '#2F855A',
-    fontWeight: '700',
+    color: '#6B7280',
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -1178,17 +1250,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
+    paddingVertical: 20,
     paddingHorizontal: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     marginBottom: 12,
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   skeletonUserInfo: {
     flexDirection: 'row',
@@ -1197,14 +1267,12 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   skeletonUserAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E2F9EE',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#D1FAE5',
   },
   skeletonUserDetails: {
     marginLeft: 16,
@@ -1212,20 +1280,26 @@ const styles = StyleSheet.create({
   },
   skeletonUserName: {
     width: 140,
-    height: 18,
-    marginBottom: 8,
+    height: 17,
+    marginBottom: 6,
     borderRadius: 4,
   },
   skeletonUserHandle: {
-    width: 100,
+    width: 120,
     height: 14,
+    marginBottom: 6,
+    borderRadius: 4,
+  },
+  skeletonUserStats: {
+    width: 100,
+    height: 13,
     borderRadius: 4,
   },
   skeletonFollowButton: {
     width: 90,
-    height: 40,
+    height: 38,
     borderRadius: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E5E7EB',
   },
 });
 
