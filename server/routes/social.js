@@ -443,9 +443,22 @@ router.get('/feed', async (req, res) => {
 
     const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
     
-    // Check which recipes are saved by current user (for now, same as favorited)
-    // In the future, this could be a separate saved_recipes table
-    const currentUserSavedIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
+    // Check which recipes are bookmarked (copied to user's recipes)
+    // We check if user has a recipe with the same title as any of the feed recipes
+    const { data: userRecipes } = await supabase
+      .from('recipes')
+      .select('title')
+      .eq('user_id', req.user.id);
+
+    const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
+    const bookmarkedRecipeIds = new Set();
+    
+    // Match feed recipes by title to see if user has bookmarked (copied) them
+    diversifiedRecipes.forEach(recipe => {
+      if (userRecipeTitles.has(recipe.title)) {
+        bookmarkedRecipeIds.add(recipe.id);
+      }
+    });
 
     // Score and rank recipes with smart algorithm
     const now = Date.now();
@@ -523,7 +536,7 @@ router.get('/feed', async (req, res) => {
       ...recipe,
       author: authorMap.get(recipe.user_id) || null,
       is_favorited: currentUserFavoriteIds.has(recipe.id),
-      is_saved: currentUserSavedIds.has(recipe.id), // For now, same as favorited
+      is_saved: bookmarkedRecipeIds.has(recipe.id), // Bookmarked = copied to user's recipes
       // Remove internal scoring fields
       score: undefined,
       created_time: undefined,

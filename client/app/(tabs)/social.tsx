@@ -495,26 +495,33 @@ export default function SocialScreen() {
     );
 
     try {
-      // For now, use the same favorites endpoint (can be separated later if needed)
-      const url = 'https://familycooksclean.onrender.com/recipes/favorite';
+      // Bookmark = copy recipe to user's recipes
+      const url = 'https://familycooksclean.onrender.com/recipes/bookmark';
       if (!wasSaved) {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
         });
-        if (!res.ok) throw new Error('Failed to save');
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to bookmark recipe');
+        }
       } else {
+        // Unbookmark: Delete the user's copy of the recipe
         const res = await fetch(url, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
         });
-        if (!res.ok) throw new Error('Failed to unsave');
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to unbookmark recipe');
+        }
       }
     } catch (error: any) {
-      console.log('[social] save toggle error', error);
-      Alert.alert('Action Failed', 'Please try again.');
+      console.log('[social] bookmark toggle error', error);
+      Alert.alert('Action Failed', error.message || 'Please try again.');
       // Revert optimistic update
       setFeed(prev =>
         prev.map(item =>

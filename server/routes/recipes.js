@@ -316,4 +316,112 @@ router.post('/save-message-recipe', async (req, res) => {
     res.json({ success: true });
 });
 
+// POST /recipes/bookmark - Copy a recipe to the user's recipes
+router.post('/bookmark', async (req, res) => {
+    const { user_id, recipe_id } = req.body;
+    if (!user_id || !recipe_id) return res.status(400).json({ error: 'Missing user_id or recipe_id' });
+
+    try {
+        // First, get the original recipe
+        const { data: originalRecipe, error: fetchError } = await supabase
+            .from('recipes')
+            .select('*')
+            .eq('id', recipe_id)
+            .single();
+
+        if (fetchError || !originalRecipe) {
+            return res.status(404).json({ error: 'Recipe not found' });
+        }
+
+        // Check if user already has a copy of this recipe
+        const { data: existingCopy, error: checkError } = await supabase
+            .from('recipes')
+            .select('id')
+            .eq('user_id', user_id)
+            .eq('title', originalRecipe.title)
+            .limit(1);
+
+        if (checkError) {
+            return res.status(500).json({ error: checkError.message });
+        }
+
+        if (existingCopy && existingCopy.length > 0) {
+            // User already has a copy, return the existing copy
+            return res.json({ success: true, recipe_id: existingCopy[0].id, already_exists: true });
+        }
+
+        // Copy the recipe to the user's recipes
+        const { data: copiedRecipe, error: insertError } = await supabase
+            .from('recipes')
+            .insert([{
+                user_id: user_id,
+                title: originalRecipe.title,
+                time: originalRecipe.time,
+                tags: originalRecipe.tags,
+                ingredients: originalRecipe.ingredients,
+                steps: originalRecipe.steps,
+            }])
+            .select()
+            .single();
+
+        if (insertError) {
+            return res.status(500).json({ error: insertError.message });
+        }
+
+        res.json({ success: true, recipe_id: copiedRecipe.id });
+    } catch (error) {
+        console.error('[recipes/bookmark] Error:', error);
+        res.status(500).json({ error: 'Failed to bookmark recipe' });
+    }
+});
+
+// DELETE /recipes/bookmark - Remove a bookmarked recipe from user's recipes
+router.delete('/bookmark', async (req, res) => {
+    const { user_id, recipe_id } = req.body;
+    if (!user_id || !recipe_id) return res.status(400).json({ error: 'Missing user_id or recipe_id' });
+
+    try {
+        // First, get the original recipe to find its title
+        const { data: originalRecipe, error: fetchOriginalError } = await supabase
+            .from('recipes')
+            .select('title')
+            .eq('id', recipe_id)
+            .single();
+
+        if (fetchOriginalError || !originalRecipe) {
+            return res.status(404).json({ error: 'Original recipe not found' });
+        }
+
+        // Find the user's copy of this recipe by title
+        // Note: This assumes one copy per user per recipe title
+        const { data: userCopy, error: fetchCopyError } = await supabase
+            .from('recipes')
+            .select('id')
+            .eq('user_id', user_id)
+            .eq('title', originalRecipe.title)
+            .limit(1)
+            .single();
+
+        if (fetchCopyError || !userCopy) {
+            return res.status(404).json({ error: 'Bookmarked recipe not found' });
+        }
+
+        // Delete the user's copy
+        const { error: deleteError } = await supabase
+            .from('recipes')
+            .delete()
+            .eq('id', userCopy.id)
+            .eq('user_id', user_id);
+
+        if (deleteError) {
+            return res.status(500).json({ error: deleteError.message });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[recipes/bookmark] Delete error:', error);
+        res.status(500).json({ error: 'Failed to unbookmark recipe' });
+    }
+});
+
 module.exports = router;
