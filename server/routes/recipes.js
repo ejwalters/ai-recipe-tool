@@ -57,13 +57,19 @@ router.put('/:id', async (req, res) => {
 
 // GET /recipes/list
 router.get('/list', async (req, res) => {
-    let { limit, q, user_id } = req.query;
+    let { limit, q, user_id, filter_by_user } = req.query;
     limit = Math.min(parseInt(limit) || 20, 100);
     let query = supabase
         .from('recipes')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
+    
+    // If filter_by_user is true, only return recipes created by this user
+    if (filter_by_user === 'true' && user_id) {
+        query = query.eq('user_id', user_id);
+    }
+    
     if (q) {
         query = query.ilike('title', `%${q}%`);
     }

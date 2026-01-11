@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Heart, HeartIcon } from 'lucide-react-native';
+import { profileService } from '../../lib/profileService';
 import { supabase } from '../../lib/supabase';
 
 const TAB_BAR_HEIGHT = 90;
@@ -144,28 +145,48 @@ export default function RecipesScreen() {
     const [favoriteRecipes, setFavoriteRecipes] = useState<any[]>([]);
     const [loadingFavorites, setLoadingFavorites] = useState(false);
     const [favoritesLoaded, setFavoritesLoaded] = useState(false);
-    const [popularTags, setPopularTags] = useState<{ tag: string, count: number }[]>([]);
+    const [popularTagsData, setPopularTagsData] = useState<{ tag: string, count: number }[]>([]);
+    const [popularTags, setPopularTags] = useState<string[]>([]);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [profile, setProfile] = useState<{ avatar_url?: string | null } | null>(null);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => {
-            if (data?.user) setUserId(data.user.id);
+            if (data?.user) {
+                setUserId(data.user.id);
+                profileService.getProfile().then(setProfile).catch(() => setProfile(null));
+            }
         });
     }, []);
 
     useEffect(() => {
         fetch('https://familycooksclean.onrender.com/recipes/tags/popular')
             .then(res => res.json())
-            .then(data => setPopularTags(data))
-            .catch(() => setPopularTags([]));
+            .then(data => {
+                // Limit to top 3 most popular tags for the category filters
+                if (Array.isArray(data)) {
+                    const topTagsData = data.slice(0, 3);
+                    setPopularTagsData(topTagsData);
+                    const topTags = topTagsData.map((item: any) => item.tag || item);
+                    setPopularTags(topTags);
+                } else {
+                    setPopularTagsData([]);
+                    setPopularTags([]);
+                }
+            })
+            .catch(() => {
+                setPopularTagsData([]);
+                setPopularTags([]);
+            });
     }, []);
 
     const fetchAllRecipes = useCallback((searchTerm = '', tags: string[] = []) => {
         fetchIdRef.current += 1;
         const fetchId = fetchIdRef.current;
-        let url = `https://familycooksclean.onrender.com/recipes/list?limit=20`;
+        let url = `https://familycooksclean.onrender.com/recipes/list?limit=100`;
         if (userId) {
-            url += `&user_id=${userId}`;
+            url += `&user_id=${userId}&filter_by_user=true`;
         }
         if (searchTerm) url += `&q=${encodeURIComponent(searchTerm)}`;
         if (tags.length > 0) url += `&tags=${encodeURIComponent(tags.join(','))}`;
@@ -248,30 +269,30 @@ export default function RecipesScreen() {
     useEffect(() => {
         if (!userId) return;
         if (activeSegment === 'all') {
-            fetchAllRecipes(search, selectedTags);
+            fetchAllRecipes(search, selectedCategories);
         }
-    }, [activeSegment, search, selectedTags, userId, fetchAllRecipes]);
+    }, [activeSegment, search, selectedCategories, userId, fetchAllRecipes]);
 
     useEffect(() => {
         if (activeSegment === 'favorites') {
-            if (selectedTags.length > 0) {
-                setSelectedTags([]);
+            if (selectedCategories.length > 0) {
+                setSelectedCategories([]);
             }
             if (userId && !favoritesLoaded && !loadingFavorites) {
                 fetchFavoriteRecipes();
             }
         }
-    }, [activeSegment, userId, favoritesLoaded, loadingFavorites, fetchFavoriteRecipes, selectedTags.length]);
+    }, [activeSegment, userId, favoritesLoaded, loadingFavorites, fetchFavoriteRecipes, selectedCategories.length]);
 
     useFocusEffect(
         useCallback(() => {
             if (!userId) return;
             if (activeSegment === 'all') {
-                fetchAllRecipes(search, selectedTags);
+                fetchAllRecipes(search, selectedCategories);
             } else {
                 fetchFavoriteRecipes();
             }
-        }, [activeSegment, fetchAllRecipes, fetchFavoriteRecipes, search, selectedTags, userId])
+        }, [activeSegment, fetchAllRecipes, fetchFavoriteRecipes, search, selectedCategories, userId])
     );
 
     const handleToggleFavorite = async (recipeId: string) => {
@@ -325,8 +346,36 @@ export default function RecipesScreen() {
         );
     }, [favoriteRecipes, search]);
 
-    const renderRecipeCard = useCallback(({ item }: { item: any }) => {
-        const tags = Array.isArray(item.tags) ? item.tags.slice(0, 2) : [];
+    const getRecipeIconColor = (index: number) => {
+        const colors = ['#FFE5D0', '#D1FAE5', '#E1D5FF', '#E6EEFF'];
+        return colors[index % colors.length];
+    };
+
+    const getRecipeIcon = (title: string, index: number) => {
+        const lowerTitle = title.toLowerCase();
+        if (lowerTitle.includes('pasta') || lowerTitle.includes('carbonara')) {
+            return { name: 'restaurant-outline' as const, color: '#FFA94D' };
+        } else if (lowerTitle.includes('salad') || lowerTitle.includes('garden')) {
+            return { name: 'leaf-outline' as const, color: '#34D399' };
+        } else if (lowerTitle.includes('cookie') || lowerTitle.includes('dessert') || lowerTitle.includes('chocolate')) {
+            return { name: 'cafe-outline' as const, color: '#A78BFA' };
+        } else if (lowerTitle.includes('fish') || lowerTitle.includes('salmon')) {
+            return { name: 'fish-outline' as const, color: '#60A5FA' };
+        }
+        const defaultIcons = [
+            { name: 'restaurant-outline' as const, color: '#FFA94D' },
+            { name: 'leaf-outline' as const, color: '#34D399' },
+            { name: 'cafe-outline' as const, color: '#A78BFA' },
+            { name: 'fish-outline' as const, color: '#60A5FA' },
+        ];
+        return defaultIcons[index % defaultIcons.length];
+    };
+
+    const renderRecipeCard = useCallback(({ item, index }: { item: any; index: number }) => {
+        const tags = Array.isArray(item.tags) ? item.tags.slice(0, 3) : [];
+        const iconInfo = getRecipeIcon(item.title || '', index);
+        const iconBgColor = getRecipeIconColor(index);
+        
         return (
             <TouchableOpacity
                 onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
@@ -335,23 +384,28 @@ export default function RecipesScreen() {
             >
                 <View style={styles.recipeCard}>
                     <View style={styles.recipeCardBody}>
-                        <View style={styles.recipeIcon}>
-                            <Ionicons name="fast-food-outline" size={22} color="#256D85" />
+                        <View style={[styles.recipeIcon, { backgroundColor: iconBgColor }]}>
+                            <Ionicons name={iconInfo.name} size={22} color={iconInfo.color} />
                         </View>
                         <View style={styles.recipeInfo}>
                             <CustomText style={styles.recipeTitle}>{item.title}</CustomText>
-                            <View style={styles.recipeMeta}>
-                                <Ionicons name="time-outline" size={16} color="#64748B" />
-                                <CustomText style={styles.recipeMetaText}>
-                                    {item.time || '—'}
-                                </CustomText>
+                            <View style={styles.recipeMetaRow}>
+                                <View style={styles.recipeMeta}>
+                                    <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                                    <CustomText style={styles.recipeMetaText}>
+                                        {item.time || '—'}
+                                    </CustomText>
+                                </View>
+                                <View style={styles.recipeMeta}>
+                                    <Ionicons name="list-outline" size={14} color="#9CA3AF" />
+                                    <CustomText style={styles.recipeMetaText}>
+                                        {item.ingredients?.length || 0} ingredients
+                                    </CustomText>
+                                </View>
                             </View>
-                            <CustomText style={styles.recipeIngredients}>
-                                {item.ingredients?.length || 0} ingredients
-                            </CustomText>
                             {tags.length > 0 && (
                                 <View style={styles.recipeTagRow}>
-                                    {tags.map(tag => (
+                                    {tags.map((tag: string) => (
                                         <View key={tag} style={styles.recipeTagChip}>
                                             <CustomText style={styles.recipeTagChipText}>{tag}</CustomText>
                                         </View>
@@ -403,32 +457,49 @@ export default function RecipesScreen() {
         <SafeAreaView style={styles.safeArea} edges={['top']}>
             {/* Header outside FlatList for stability */}
             <View style={styles.headerWrapper}>
-                <View style={styles.heroCard}>
-                    <View style={styles.heroIcon}>
-                        <Ionicons
-                            name={activeSegment === 'favorites' ? 'heart-outline' : 'restaurant-outline'}
-                            size={24}
-                            color="#FFFFFF"
-                        />
+                {/* Top Header with Title and Avatar */}
+                <View style={styles.topHeader}>
+                    <View style={styles.titleContainer}>
+                        <CustomText style={styles.pageTitle}>Hello, Chef!</CustomText>
+                        <CustomText style={styles.pageSubtitle}>What shall we cook today?</CustomText>
                     </View>
-                    <CustomText style={styles.heroTitle}>
-                        {activeSegment === 'favorites' ? 'Saved & Savored' : 'Discover & Create'}
-                    </CustomText>
-                    <CustomText style={styles.heroSubtitle}>
-                        {activeSegment === 'favorites'
-                            ? 'Keep your go-to dishes close and beautifully organized.'
-                            : 'Search for new ideas or filter by the flavors you crave today.'}
-                    </CustomText>
-                    <TouchableOpacity
-                        style={styles.heroButton}
-                        onPress={openAddRecipe}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-                        <CustomText style={styles.heroButtonText}>Add new recipe</CustomText>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+                        {profile?.avatar_url ? (
+                            <Image source={{ uri: profile.avatar_url }} style={styles.headerAvatar} />
+                        ) : (
+                            <View style={styles.headerAvatar}>
+                                <Ionicons name="person" size={24} color="#9CA3AF" />
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
 
+                {/* Hero Card */}
+                <View style={styles.heroCard}>
+                    <View style={styles.heroCardContent}>
+                        <View>
+                            <CustomText style={styles.heroCardTitle}>Create something delicious</CustomText>
+                            <CustomText style={styles.heroCardSubtitle}>Share your recipe</CustomText>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.heroCardButton}
+                            onPress={openAddRecipe}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="add" size={18} color="#FFFFFF" />
+                            <CustomText style={styles.heroCardButtonText}>Add recipe</CustomText>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Search bar outside FlatList - directly controlled like HomeScreen */}
+                <SearchBar
+                    search={search}
+                    onSearchChange={setSearch}
+                    placeholder={searchPlaceholder}
+                />
+
+                {/* Main Tabs */}
                 <View style={styles.segmentContainer}>
                     {SEGMENTS.map(segment => {
                         const isActive = segment.id === activeSegment;
@@ -449,46 +520,50 @@ export default function RecipesScreen() {
                     })}
                 </View>
 
-                {/* Search bar outside FlatList - directly controlled like HomeScreen */}
-                <SearchBar
-                    search={search}
-                    onSearchChange={setSearch}
-                    placeholder={searchPlaceholder}
-                />
-
                 {activeSegment === 'all' ? (
-                    <View style={styles.tagsContainer}>
-                        <CustomText style={styles.tagsPrompt}>Tap a tag to refine your search</CustomText>
+                    <View style={styles.categoryContainer}>
                         <FlatList
-                            data={popularTags}
-                            keyExtractor={({ tag }) => tag}
+                            data={['All', ...popularTags]}
+                            keyExtractor={(item) => item}
                             horizontal
                             showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.tagsScrollContent}
-                            renderItem={({ item: { tag } }) => (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.filterChip,
-                                        selectedTags.includes(tag) && styles.filterChipActive,
-                                    ]}
-                                    onPress={() => {
-                                        setSelectedTags(prev =>
-                                            prev.includes(tag)
-                                                ? prev.filter(t => t !== tag)
-                                                : [...prev, tag]
-                                        );
-                                    }}
-                                >
-                                    <CustomText
+                            contentContainerStyle={styles.categoryScrollContent}
+                            renderItem={({ item: category }) => {
+                                const isAll = category === 'All';
+                                const isActive = isAll 
+                                    ? selectedCategories.length === 0
+                                    : selectedCategories.includes(category);
+                                return (
+                                    <TouchableOpacity
                                         style={[
-                                            styles.filterText,
-                                            selectedTags.includes(tag) && styles.filterTextActive,
+                                            styles.categoryChip,
+                                            isActive && styles.categoryChipActive,
                                         ]}
+                                        onPress={() => {
+                                            if (isAll) {
+                                                setSelectedCategories([]);
+                                            } else {
+                                                setSelectedCategories(prev => {
+                                                    if (prev.includes(category)) {
+                                                        return prev.filter(t => t !== category);
+                                                    } else {
+                                                        return [...prev, category];
+                                                    }
+                                                });
+                                            }
+                                        }}
                                     >
-                                        {tag}
-                                    </CustomText>
-                                </TouchableOpacity>
-                            )}
+                                        <CustomText
+                                            style={[
+                                                styles.categoryText,
+                                                isActive && styles.categoryTextActive,
+                                            ]}
+                                        >
+                                            {category}
+                                        </CustomText>
+                                    </TouchableOpacity>
+                                );
+                            }}
                         />
                     </View>
                 ) : (
@@ -507,7 +582,7 @@ export default function RecipesScreen() {
                     <FlatList
                         data={allRecipes}
                         keyExtractor={item => item.id}
-                        renderItem={renderRecipeCard}
+                        renderItem={({ item, index }) => renderRecipeCard({ item, index })}
                         ListEmptyComponent={() =>
                             (loadingAll && allRecipes.length === 0) || searchingAll
                                 ? <RecipeLoadingSkeleton />
@@ -520,7 +595,7 @@ export default function RecipesScreen() {
                     <FlatList
                         data={displayedFavorites}
                         keyExtractor={item => item.id}
-                        renderItem={renderRecipeCard}
+                        renderItem={({ item, index }) => renderRecipeCard({ item, index })}
                         ListEmptyComponent={() =>
                             loadingFavorites && !favoritesLoaded
                                 ? <RecipeLoadingSkeleton />
@@ -532,14 +607,6 @@ export default function RecipesScreen() {
                 )}
             </View>
 
-            <TouchableOpacity
-                style={[styles.fab, { bottom: insets.bottom + TAB_BAR_HEIGHT + 16 }]}
-                accessibilityLabel="Add Recipe"
-                onPress={openAddRecipe}
-                activeOpacity={0.8}
-            >
-                <Ionicons name="add" size={28} color="#fff" />
-            </TouchableOpacity>
         </SafeAreaView>
     );
 }
@@ -551,69 +618,95 @@ const styles = StyleSheet.create({
     },
     headerWrapper: {
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'ios' ? 12 : 4,
-        paddingBottom: 12,
+        paddingTop: Platform.OS === 'ios' ? 8 : 4,
+        paddingBottom: 10,
     },
-    heroCard: {
-        backgroundColor: '#256D85',
-        borderRadius: 28,
-        padding: 16,
-        shadowColor: 'rgba(89, 147, 170, 0.35)',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 8,
+    topHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 16,
     },
-    heroIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.22)',
+    titleContainer: {
+        flex: 1,
+    },
+    pageTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#1F2937',
+        marginBottom: 4,
+        letterSpacing: -0.5,
+    },
+    pageSubtitle: {
+        fontSize: 16,
+        color: '#6B7280',
+        fontWeight: '400',
+    },
+    headerAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#F3F4F6',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10,
+        overflow: 'hidden',
     },
-    heroTitle: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        marginBottom: 6,
-        letterSpacing: -0.4,
+    heroCard: {
+        backgroundColor: '#E8EAF6',
+        borderRadius: 20,
+        padding: 18,
+        marginBottom: 20,
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    heroSubtitle: {
+    heroCardContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 16,
+    },
+    heroCardTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 4,
+    },
+    heroCardSubtitle: {
         fontSize: 14,
-        color: 'rgba(255,255,255,0.85)',
-        lineHeight: 19,
-        marginBottom: 12,
+        color: '#6B7280',
+        fontWeight: '400',
     },
-    heroButton: {
+    heroCardButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(255,255,255,0.18)',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: 18,
-        gap: 8,
+        backgroundColor: '#256D85',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 12,
+        gap: 6,
     },
-    heroButtonText: {
+    heroCardButtonText: {
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '600',
     },
     segmentContainer: {
         flexDirection: 'row',
-        backgroundColor: '#E5EBF8',
-        borderRadius: 24,
-        padding: 4,
-        marginTop: 20,
+        backgroundColor: 'transparent',
+        borderRadius: 12,
+        marginTop: 16,
+        gap: 12,
     },
     segmentButton: {
         flex: 1,
-        borderRadius: 20,
-        paddingVertical: 8,
+        borderRadius: 12,
+        paddingVertical: 10,
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#F3F4F6',
     },
     segmentButtonActive: {
         backgroundColor: '#fff',
@@ -626,26 +719,28 @@ const styles = StyleSheet.create({
     segmentLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#64748B',
+        color: '#6B7280',
     },
     segmentLabelActive: {
-        color: '#256D85',
+        color: '#1F2937',
     },
     searchBarWrapper: {
-        marginTop: 18,
+        marginTop: 16,
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        paddingHorizontal: 18,
-        height: 52,
-        shadowColor: 'rgba(15, 23, 42, 0.08)',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 4,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        height: 48,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
     },
     searchInput: {
         flex: 1,
@@ -658,39 +753,31 @@ const styles = StyleSheet.create({
     searchIcon: {
         marginRight: 4,
     },
-    tagsContainer: {
-        marginTop: 22,
+    categoryContainer: {
+        marginTop: 16,
+        marginBottom: 4,
     },
-    tagsPrompt: {
-        color: '#6B7280',
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 10,
+    categoryScrollContent: {
+        paddingVertical: 4,
+        gap: 8,
     },
-    tagsScrollContent: {
-        paddingVertical: 8,
-        gap: 10,
-    },
-    filterChip: {
-        backgroundColor: '#F1F5F9',
+    categoryChip: {
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        marginRight: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        marginRight: 8,
     },
-    filterChipActive: {
-        backgroundColor: '#B6E2D3',
-        borderColor: '#B6E2D3',
+    categoryChipActive: {
+        backgroundColor: '#256D85',
     },
-    filterText: {
-        color: '#64748B',
+    categoryText: {
+        color: '#6B7280',
         fontSize: 14,
         fontWeight: '600',
     },
-    filterTextActive: {
-        color: '#1E293B',
+    categoryTextActive: {
+        color: '#FFFFFF',
     },
     favoritesHint: {
         flexDirection: 'row',
@@ -824,11 +911,10 @@ const styles = StyleSheet.create({
     recipeIcon: {
         width: 54,
         height: 54,
-        borderRadius: 16,
-        backgroundColor: '#E6F4F1',
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 18,
+        marginRight: 16,
     },
     iconImage: {
         width: 28,
@@ -845,6 +931,9 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         lineHeight: 22,
     },
+    recipeMetaRow: {
+        marginBottom: 10,
+    },
     recipeMeta: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -852,14 +941,9 @@ const styles = StyleSheet.create({
     },
     recipeMetaText: {
         fontSize: 14,
-        color: '#6B7280',
-        marginLeft: 6,
-        fontWeight: '500',
-    },
-    recipeIngredients: {
-        fontSize: 14,
         color: '#9CA3AF',
-        fontWeight: '500',
+        marginLeft: 6,
+        fontWeight: '400',
     },
     recipeTagRow: {
         flexDirection: 'row',
@@ -867,15 +951,17 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     recipeTagChip: {
-        backgroundColor: '#F0F9F4',
+        backgroundColor: '#FEF3C7',
         borderRadius: 12,
         paddingHorizontal: 10,
         paddingVertical: 4,
+        marginRight: 6,
+        alignSelf: 'flex-start',
     },
     recipeTagChipText: {
         fontSize: 12,
-        color: '#2F855A',
-        fontWeight: '600',
+        color: '#6B7280',
+        fontWeight: '500',
     },
     heartButton: {
         backgroundColor: '#EEF2FF',
@@ -903,21 +989,5 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 6,
         lineHeight: 20,
-    },
-    fab: {
-        position: 'absolute',
-        right: 24,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: '#6DA98C',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
-        zIndex: 100,
     },
 }); 
