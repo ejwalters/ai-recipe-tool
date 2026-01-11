@@ -442,23 +442,6 @@ router.get('/feed', async (req, res) => {
       .in('recipe_id', recipeIds);
 
     const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
-    
-    // Check which recipes are bookmarked (copied to user's recipes)
-    // We check if user has a recipe with the same title as any of the feed recipes
-    const { data: userRecipes } = await supabase
-      .from('recipes')
-      .select('title')
-      .eq('user_id', req.user.id);
-
-    const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
-    const bookmarkedRecipeIds = new Set();
-    
-    // Match feed recipes by title to see if user has bookmarked (copied) them
-    diversifiedRecipes.forEach(recipe => {
-      if (userRecipeTitles.has(recipe.title)) {
-        bookmarkedRecipeIds.add(recipe.id);
-      }
-    });
 
     // Score and rank recipes with smart algorithm
     const now = Date.now();
@@ -530,6 +513,23 @@ router.get('/feed', async (req, res) => {
     }
 
     const authorMap = new Map(authors.map(author => [author.id, author]));
+
+    // Check which recipes are bookmarked (copied to user's recipes)
+    // We check if user has a recipe with the same title as any of the diversified recipes
+    const { data: userRecipes } = await supabase
+      .from('recipes')
+      .select('title')
+      .eq('user_id', req.user.id);
+
+    const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
+    const bookmarkedRecipeIds = new Set();
+    
+    // Match diversified recipes by title to see if user has bookmarked (copied) them
+    diversifiedRecipes.forEach(recipe => {
+      if (userRecipeTitles.has(recipe.title)) {
+        bookmarkedRecipeIds.add(recipe.id);
+      }
+    });
 
     // Format final results
     const results = diversifiedRecipes.map(recipe => ({
