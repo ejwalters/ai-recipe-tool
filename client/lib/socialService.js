@@ -65,6 +65,10 @@ export const socialService = {
     const params = new URLSearchParams({ limit: `${limit}` });
     return authenticatedFetch(`/social/feed?${params.toString()}`);
   },
+
+  async getSuggestedCreators() {
+    return authenticatedFetch('/social/suggested');
+  },
 };
 
 

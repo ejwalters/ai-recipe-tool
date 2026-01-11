@@ -27,6 +27,94 @@ const authenticateUser = async (req, res, next) => {
 
 router.use(authenticateUser);
 
+// GET /social/suggested
+router.get('/suggested', async (req, res) => {
+  try {
+    // Get users with recipes, ordered by recipe_count desc, then follower_count desc
+    // Exclude current user and users already followed
+    const { data: currentUserFollows } = await supabase
+      .from('social_follows')
+      .select('followee_id')
+      .eq('follower_id', req.user.id);
+    
+    const followedIds = (currentUserFollows || []).map(row => row.followee_id);
+    const excludeIds = [req.user.id, ...followedIds];
+    
+    // Get users with recipes (recipe_count > 0)
+    // We'll get recipe counts for all users and filter
+    const { data: allProfiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, display_name, username, avatar_url')
+      .neq('id', req.user.id)
+      .limit(100);
+    
+    if (profilesError) {
+      return res.status(500).json({ error: profilesError.message });
+    }
+    
+    if (!allProfiles || allProfiles.length === 0) {
+      return res.json([]);
+    }
+    
+    const profileIds = allProfiles.map(p => p.id);
+    
+    // Get recipe counts
+    const recipeCountPromises = profileIds.map(userId =>
+      supabase
+        .from('recipes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+    );
+    
+    const recipeCountResults = await Promise.all(recipeCountPromises);
+    const recipeCountMap = new Map();
+    recipeCountResults.forEach((result, index) => {
+      recipeCountMap.set(profileIds[index], result.count || 0);
+    });
+    
+    // Get follower counts
+    const followerCountPromises = profileIds.map(userId =>
+      supabase
+        .from('social_follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('followee_id', userId)
+    );
+    
+    const followerCountResults = await Promise.all(followerCountPromises);
+    const followerCountMap = new Map();
+    followerCountResults.forEach((result, index) => {
+      followerCountMap.set(profileIds[index], result.count || 0);
+    });
+    
+    // Filter to users with recipes and not already followed, then sort
+    const suggested = allProfiles
+      .filter(profile => {
+        const recipeCount = recipeCountMap.get(profile.id) || 0;
+        const isFollowed = followedIds.includes(profile.id);
+        return recipeCount > 0 && !isFollowed;
+      })
+      .map(profile => ({
+        ...profile,
+        recipes_count: recipeCountMap.get(profile.id) || 0,
+        follower_count: followerCountMap.get(profile.id) || 0,
+        is_following: false,
+      }))
+      .sort((a, b) => {
+        // Sort by recipe_count desc, then follower_count desc
+        if (a.recipes_count !== b.recipes_count) {
+          return b.recipes_count - a.recipes_count;
+        }
+        return (b.follower_count || 0) - (a.follower_count || 0);
+      })
+      .slice(0, 20);
+    
+    res.json(suggested);
+  } catch (error) {
+    console.error('[social/suggested] Error:', error);
+    res.status(500).json({ error: 'Failed to get suggested creators' });
+  }
+});
+
 // GET /social/search?q=...
 router.get('/search', async (req, res) => {
   const query = (req.query.q || '').trim();
@@ -72,10 +160,23 @@ router.get('/search', async (req, res) => {
         uniqueMap.set(profile.id, profile);
       }
     });
+    // Sort by relevance: startsWith matches first, then contains matches
+    // Then by recipe_count desc, then follower_count desc, then name
+    const queryLower = query.toLowerCase();
     const data = Array.from(uniqueMap.values())
       .sort((a, b) => {
         const aName = (a.display_name || a.username || '').toLowerCase();
         const bName = (b.display_name || b.username || '').toLowerCase();
+        const aHandle = (a.username || '').toLowerCase();
+        const bHandle = (b.username || '').toLowerCase();
+        
+        // Prioritize startsWith matches
+        const aStartsWith = aName.startsWith(queryLower) || aHandle.startsWith(queryLower);
+        const bStartsWith = bName.startsWith(queryLower) || bHandle.startsWith(queryLower);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        
+        // Then sort by name
         return aName.localeCompare(bName);
       })
       .slice(0, 25);
@@ -130,6 +231,34 @@ router.get('/search', async (req, res) => {
       follower_count: followerCountMap.get(profile.id) || 0,
       recipes_count: recipeCountMap.get(profile.id) || 0,
     }));
+
+    // Sort by relevance: startsWith matches first, then by recipe_count desc, then follower_count desc
+    const queryLower = query.toLowerCase();
+    results.sort((a, b) => {
+      const aName = (a.display_name || a.username || '').toLowerCase();
+      const bName = (b.display_name || b.username || '').toLowerCase();
+      const aHandle = (a.username || '').toLowerCase();
+      const bHandle = (b.username || '').toLowerCase();
+      
+      // Prioritize startsWith matches
+      const aStartsWith = aName.startsWith(queryLower) || aHandle.startsWith(queryLower);
+      const bStartsWith = bName.startsWith(queryLower) || bHandle.startsWith(queryLower);
+      if (aStartsWith && !bStartsWith) return -1;
+      if (!aStartsWith && bStartsWith) return 1;
+      
+      // Then by recipe_count desc
+      const aRecipes = a.recipes_count || 0;
+      const bRecipes = b.recipes_count || 0;
+      if (aRecipes !== bRecipes) return bRecipes - aRecipes;
+      
+      // Then by follower_count desc
+      const aFollowers = a.follower_count || 0;
+      const bFollowers = b.follower_count || 0;
+      if (aFollowers !== bFollowers) return bFollowers - aFollowers;
+      
+      // Finally by name
+      return aName.localeCompare(bName);
+    });
 
     res.json(results);
   } catch (error) {
@@ -332,6 +461,10 @@ router.get('/feed', async (req, res) => {
       .in('recipe_id', recipeIds);
 
     const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
+    
+    // Check which recipes are saved by current user (for now, same as favorited)
+    // In the future, this could be a separate saved_recipes table
+    const currentUserSavedIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
 
     // Score and rank recipes with smart algorithm
     const now = Date.now();
@@ -409,6 +542,7 @@ router.get('/feed', async (req, res) => {
       ...recipe,
       author: authorMap.get(recipe.user_id) || null,
       is_favorited: currentUserFavoriteIds.has(recipe.id),
+      is_saved: currentUserSavedIds.has(recipe.id), // For now, same as favorited
       // Remove internal scoring fields
       score: undefined,
       created_time: undefined,

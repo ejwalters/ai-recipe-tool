@@ -28,7 +28,8 @@ type FeedItem = {
   ingredients?: string[] | null;
   created_at: string;
   user_id: string;
-  is_favorited?: boolean;
+  is_favorited?: boolean; // Like (social signal)
+  is_saved?: boolean; // Save to My Recipes
   favorite_count?: number;
   author?: {
     id: string;
@@ -277,6 +278,8 @@ export default function SocialScreen() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
+  const [suggestedCreators, setSuggestedCreators] = useState<UserResult[]>([]);
+  const [loadingSuggested, setLoadingSuggested] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,6 +332,23 @@ export default function SocialScreen() {
       loadFeed(false);
     }
   }, [feedRefreshing, loadFeed]);
+
+  // Load suggested creators when discover tab is active and search is empty
+  useEffect(() => {
+    if (activeSegment === 'discover' && !searchTerm.trim() && suggestedCreators.length === 0 && !loadingSuggested) {
+      setLoadingSuggested(true);
+      socialService.getSuggestedCreators()
+        .then(results => {
+          setSuggestedCreators(Array.isArray(results) ? results : []);
+        })
+        .catch((error: any) => {
+          console.log('[social] getSuggestedCreators error', error);
+        })
+        .finally(() => {
+          setLoadingSuggested(false);
+        });
+    }
+  }, [activeSegment, searchTerm, suggestedCreators.length, loadingSuggested]);
 
   useEffect(() => {
     if (activeSegment !== 'discover') {
@@ -457,6 +477,58 @@ export default function SocialScreen() {
     }
   }, [userId]);
 
+  const handleFeedSaveToggle = useCallback(async (recipe: FeedItem) => {
+    if (!userId || !recipe.id) return;
+
+    const wasSaved = recipe.is_saved || false;
+
+    // Optimistic update
+    setFeed(prev =>
+      prev.map(item =>
+        item.id === recipe.id
+          ? {
+              ...item,
+              is_saved: !wasSaved,
+            }
+          : item
+      )
+    );
+
+    try {
+      // For now, use the same favorites endpoint (can be separated later if needed)
+      const url = 'https://familycooksclean.onrender.com/recipes/favorite';
+      if (!wasSaved) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
+        });
+        if (!res.ok) throw new Error('Failed to save');
+      } else {
+        const res = await fetch(url, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, recipe_id: recipe.id }),
+        });
+        if (!res.ok) throw new Error('Failed to unsave');
+      }
+    } catch (error: any) {
+      console.log('[social] save toggle error', error);
+      Alert.alert('Action Failed', 'Please try again.');
+      // Revert optimistic update
+      setFeed(prev =>
+        prev.map(item =>
+          item.id === recipe.id
+            ? {
+                ...item,
+                is_saved: wasSaved,
+              }
+            : item
+        )
+      );
+    }
+  }, [userId]);
+
   // Format relative time (e.g., "2h ago", "3d ago")
   const formatRelativeTime = (dateString: string): string => {
     const date = new Date(dateString);
@@ -558,30 +630,68 @@ export default function SocialScreen() {
             </View>
           )}
 
-          {/* Favorite Button */}
-          <TouchableOpacity
-            style={styles.feedFavoriteButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleFeedFavoriteToggle(item);
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            {item.is_favorited ? (
-              <Ionicons name="heart" size={22} color="#E4576A" />
-            ) : (
-              <Ionicons name="heart-outline" size={22} color="#94A3B8" />
-            )}
-          </TouchableOpacity>
+          {/* Action Buttons - Like and Save */}
+          <View style={styles.feedActionButtons}>
+            {/* Like Button (Heart) */}
+            <TouchableOpacity
+              style={styles.feedActionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleFeedFavoriteToggle(item);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {item.is_favorited ? (
+                <Ionicons name="heart" size={20} color="#E4576A" />
+              ) : (
+                <Ionicons name="heart-outline" size={20} color="#94A3B8" />
+              )}
+            </TouchableOpacity>
+            
+            {/* Save Button (Bookmark) */}
+            <TouchableOpacity
+              style={styles.feedActionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleFeedSaveToggle(item);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {item.is_saved ? (
+                <Ionicons name="bookmark" size={20} color="#256D85" />
+              ) : (
+                <Ionicons name="bookmark-outline" size={20} color="#94A3B8" />
+              )}
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       );
     },
-    [router, handleFeedFavoriteToggle]
+    [router, handleFeedFavoriteToggle, handleFeedSaveToggle]
   );
 
   const feedEmptyComponent = useMemo(() => {
     if (loadingFeed) {
       return null;
+    }
+    if (feed.length === 0 && !feedError) {
+      // User has 0 follows - show onboarding state
+      return (
+        <View style={styles.emptyState}>
+          <Ionicons name="people-circle-outline" size={64} color="#9CA3AF" />
+          <CustomText style={styles.emptyHeading}>Follow a few cooks to build your feed</CustomText>
+          <CustomText style={styles.emptyText}>
+            Discover amazing recipes from chefs you follow
+          </CustomText>
+          <TouchableOpacity
+            style={styles.emptyStateButton}
+            onPress={() => setActiveSegment('discover')}
+            activeOpacity={0.85}
+          >
+            <CustomText style={styles.emptyStateButtonText}>Find creators</CustomText>
+          </TouchableOpacity>
+        </View>
+      );
     }
     const message = feedError
       ? feedError
@@ -593,7 +703,7 @@ export default function SocialScreen() {
         <CustomText style={styles.emptyText}>{message}</CustomText>
       </View>
     );
-  }, [feedError, loadingFeed]);
+  }, [feedError, loadingFeed, feed.length]);
 
   const renderUserRow = useCallback(
     ({ item }: { item: UserResult }) => {
@@ -664,7 +774,7 @@ export default function SocialScreen() {
         <View style={styles.headerTopRow}>
           <View style={styles.headerTitleContainer}>
             <CustomText style={styles.headerTitle}>Community Kitchen</CustomText>
-            <CustomText style={styles.headerTagline}>Connect. Cook. Share.</CustomText>
+            <CustomText style={styles.headerTagline}>From people you follow and new cooks to discover.</CustomText>
           </View>
           <TouchableOpacity style={styles.bellIconButton}>
             <Ionicons name="notifications-outline" size={24} color="#1F2937" />
@@ -746,13 +856,28 @@ export default function SocialScreen() {
           )}
 
           {searchTerm.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="search-circle-outline" size={56} color="#9CA3AF" />
-              <CustomText style={styles.emptyHeading}>Start exploring</CustomText>
-              <CustomText style={styles.emptyText}>
-                Search for friends, family, or favorite creators to follow.
-              </CustomText>
-            </View>
+            loadingSuggested ? (
+              <DiscoverLoadingSkeleton />
+            ) : suggestedCreators.length > 0 ? (
+              <>
+                <CustomText style={styles.suggestedSectionTitle}>Suggested creators</CustomText>
+                <FlatList
+                  data={suggestedCreators}
+                  keyExtractor={item => item.id}
+                  renderItem={renderUserRow}
+                  contentContainerStyle={styles.listContent}
+                  showsVerticalScrollIndicator={false}
+                />
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="search-circle-outline" size={56} color="#9CA3AF" />
+                <CustomText style={styles.emptyHeading}>Start exploring</CustomText>
+                <CustomText style={styles.emptyText}>
+                  Search for friends, family, or favorite creators to follow.
+                </CustomText>
+              </View>
+            )
           ) : searching && searchResults.length === 0 ? (
             <DiscoverLoadingSkeleton />
           ) : (
@@ -772,9 +897,9 @@ export default function SocialScreen() {
                 ) : (
                   <View style={styles.emptyState}>
                     <Ionicons name="person-add-outline" size={48} color="#9CA3AF" />
-                    <CustomText style={styles.emptyHeading}>No matches yet</CustomText>
+                    <CustomText style={styles.emptyHeading}>No creators found</CustomText>
                     <CustomText style={styles.emptyText}>
-                      Try a different name or invite friends to join.
+                      Try a different name.
                     </CustomText>
                   </View>
                 )
@@ -1041,16 +1166,20 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '600',
   },
-  feedFavoriteButton: {
+  feedActionButtons: {
     position: 'absolute',
     top: 20,
     right: 20,
-    width: 40,
-    height: 40,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  feedActionButton: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
@@ -1059,6 +1188,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     backgroundColor: '#FFFFFF',
+  },
+  suggestedSectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
+    letterSpacing: -0.3,
   },
   userRow: {
     flexDirection: 'row',
@@ -1156,6 +1292,18 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  emptyStateButton: {
+    marginTop: 24,
+    backgroundColor: '#256D85',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

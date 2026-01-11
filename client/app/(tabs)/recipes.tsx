@@ -12,7 +12,7 @@ import { supabase } from '../../lib/supabase';
 const TAB_BAR_HEIGHT = 90;
 
 const SEGMENTS: Array<{ id: 'all' | 'favorites'; label: string }> = [
-    { id: 'all', label: 'All Recipes' },
+    { id: 'all', label: 'Your Recipes' },
     { id: 'favorites', label: 'Favorites' },
 ];
 
