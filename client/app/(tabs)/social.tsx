@@ -265,8 +265,11 @@ export default function SocialScreen() {
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
+  const [loadingMoreFeed, setLoadingMoreFeed] = useState(false);
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [feedHasMore, setFeedHasMore] = useState(false);
+  const [feedOffset, setFeedOffset] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const feedLoadedRef = useRef(false); // Track if feed has been loaded at least once
 
@@ -286,16 +289,51 @@ export default function SocialScreen() {
   const hasSearchedRef = useRef(false); // Track if user has performed at least one search
   const suggestedLoadedRef = useRef(false); // Track if suggested creators have been loaded
 
-  const loadFeed = useCallback(async (isInitial = false) => {
+  const loadFeed = useCallback(async (isInitial = false, offset = 0) => {
     setFeedError(null);
+    const isRefreshing = feedRefreshing || (offset === 0 && !isInitial);
+    const isLoadingMore = offset > 0;
+
     try {
-      if (!feedRefreshing) {
+      if (isLoadingMore) {
+        setLoadingMoreFeed(true);
+      } else if (!isRefreshing) {
         setLoadingFeed(true);
       }
-      const response = await socialService.getFeed(40);
+
+      const response = await socialService.getFeed(40, offset);
+      
       // Handle both old format (array) and new format (object with recipes array)
-      const recipes = Array.isArray(response) ? response : (response?.recipes || []);
-      setFeed(recipes);
+      let recipes: FeedItem[];
+      let hasMore = false;
+      
+      if (Array.isArray(response)) {
+        // Legacy format - just an array
+        recipes = response;
+        hasMore = false; // Can't know if there's more with old format
+      } else {
+        // New format with pagination metadata
+        recipes = response?.recipes || [];
+        hasMore = response?.has_more || false;
+      }
+
+      if (offset === 0) {
+        // Initial load or refresh - replace all recipes
+        setFeed(recipes);
+        setFeedOffset(recipes.length);
+      } else {
+        // Load more - append to existing recipes
+        setFeed(prev => {
+          // Filter out duplicates (shouldn't happen, but safety check)
+          const existingIds = new Set(prev.map(r => r.id));
+          const newRecipes = recipes.filter(r => !existingIds.has(r.id));
+          return [...prev, ...newRecipes];
+        });
+        setFeedOffset(prev => prev + recipes.length);
+      }
+
+      setFeedHasMore(hasMore);
+
       if (isInitial || !feedLoadedRef.current) {
         feedLoadedRef.current = true;
       }
@@ -304,13 +342,23 @@ export default function SocialScreen() {
       setFeedError('Unable to load feed right now.');
     } finally {
       setLoadingFeed(false);
+      setLoadingMoreFeed(false);
       setFeedRefreshing(false);
     }
   }, [feedRefreshing]);
 
   const handleRefreshFeed = useCallback(() => {
     setFeedRefreshing(true);
-  }, []);
+    setFeedOffset(0);
+    setFeedHasMore(false);
+    loadFeed(false, 0);
+  }, [loadFeed]);
+
+  const handleLoadMoreFeed = useCallback(() => {
+    if (!loadingMoreFeed && !loadingFeed && feedHasMore) {
+      loadFeed(false, feedOffset);
+    }
+  }, [loadingMoreFeed, loadingFeed, feedHasMore, feedOffset, loadFeed]);
 
   // Load feed on initial mount
   useEffect(() => {
@@ -330,11 +378,7 @@ export default function SocialScreen() {
     }, [activeSegment, loadFeed])
   );
 
-  useEffect(() => {
-    if (feedRefreshing) {
-      loadFeed(false);
-    }
-  }, [feedRefreshing, loadFeed]);
+  // Removed - handleRefreshFeed now directly calls loadFeed
 
   // Load suggested creators when discover tab is active and search is empty
   useEffect(() => {
@@ -864,6 +908,15 @@ export default function SocialScreen() {
                 />
               }
               ListEmptyComponent={feedEmptyComponent}
+              onEndReached={handleLoadMoreFeed}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                loadingMoreFeed ? (
+                  <View style={styles.feedFooter}>
+                    <ActivityIndicator size="small" color="#4F9E7A" />
+                  </View>
+                ) : null
+              }
             />
           )}
         </View>
@@ -1025,6 +1078,11 @@ const styles = StyleSheet.create({
   segmentLabelActive: {
     color: '#1F2937',
     fontWeight: '700',
+  },
+  feedFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   feedContainer: {
     flex: 1,
