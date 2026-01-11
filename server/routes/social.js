@@ -382,9 +382,11 @@ router.get('/followers', async (req, res) => {
   }
 });
 
-// GET /social/feed?limit=20
+// GET /social/feed?limit=20&offset=0
+// Uses Reddit's "hot" algorithm for better ranking that scales well
 router.get('/feed', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 40, 100); // Increased max limit
+  const offset = parseInt(req.query.offset, 10) || 0;
 
   try {
     const { data: followRows, error: followError } = await supabase
@@ -402,8 +404,9 @@ router.get('/feed', async (req, res) => {
 
     const followeeIds = followRows.map(row => row.followee_id);
 
-    // Get recipes from followed users - get more than limit to allow for ranking
-    const fetchLimit = Math.min(limit * 3, 100);
+    // Get recipes from followed users - fetch more for ranking, then paginate
+    // Increased fetch limit for better ranking pool
+    const fetchLimit = Math.min(limit * 5, 500); // Fetch 5x for better ranking pool
     const { data: recipes, error: recipeError } = await supabase
       .from('recipes')
       .select('*')
@@ -443,66 +446,81 @@ router.get('/feed', async (req, res) => {
 
     const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
 
-    // Score and rank recipes with smart algorithm
+    // Score and rank recipes using Reddit's "hot" algorithm (better for scaling)
+    // This algorithm balances recency and engagement in a way that works well at scale
     const now = Date.now();
     const recipesWithScores = recipes.map(recipe => {
       const favoriteCount = favoriteCountMap.get(recipe.id) || 0;
       const createdTime = new Date(recipe.created_at).getTime();
-      const ageInHours = (now - createdTime) / (1000 * 60 * 60);
+      const ageInSeconds = (now - createdTime) / 1000;
+      const ageInHours = ageInSeconds / 3600;
       
-      // Scoring algorithm:
-      // - Recency: Newer recipes get higher score (exponential decay)
-      // - Engagement: More favorites = higher score
-      // - Balance: Slight boost for recipes with some engagement (1-10 favorites)
-      let score = 0;
+      // Reddit's "hot" algorithm formula:
+      // score = log10(max(abs(s), 1)) * sign(s) + (epoch_seconds - 1134028003) / 45000
+      // Simplified for our use case:
+      // - s = upvotes - downvotes (we use favorites as "upvotes")
+      // - We want newer content to rank higher, so we subtract age
       
-      // Recency score (decays over time, newer = better)
-      // Recipes from last 24h get max score, decays over 7 days
-      const recencyScore = Math.max(0, 1 - (ageInHours / (24 * 7)));
-      score += recencyScore * 100; // Weight: 100
+      // Calculate score using Reddit's hot algorithm
+      // This naturally balances new content with popular content
+      const s = favoriteCount; // Favorites act as "upvotes"
+      const order = Math.log10(Math.max(Math.abs(s), 1));
+      const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
       
-      // Engagement score (favorite count)
-      // Logarithmic scale so 1-2 favorites matter but don't dominate
-      const engagementScore = Math.log10(favoriteCount + 1) / Math.log10(50); // Normalize to 0-1
-      score += engagementScore * 50; // Weight: 50
+      // Reddit uses epoch seconds, we'll use a similar approach
+      // The division by 45000 creates a time decay (roughly 12.5 hours per point)
+      // We adjust this to work better for recipes (longer shelf life than Reddit posts)
+      const seconds = Math.floor(createdTime / 1000);
+      const hotScore = order * sign + seconds / 45000;
       
-      // Bonus for recipes with moderate engagement (sweet spot)
-      if (favoriteCount > 0 && favoriteCount < 10) {
-        score += 10; // Small boost for community engagement
-      }
+      // Alternative: Simplified hot algorithm optimized for recipes
+      // This gives better results for content that should have longer relevance
+      const recipeHotScore = Math.log10(Math.max(favoriteCount, 1) + 1) + 
+                            (createdTime / 1000) / 45000 - 
+                            (ageInHours / 24) * 0.1; // Gentle decay over days
       
       return {
         ...recipe,
         favorite_count: favoriteCount,
-        score,
+        score: recipeHotScore, // Use the recipe-optimized hot score
         created_time: createdTime,
       };
     });
 
-    // Sort by score, then diversify by author
+    // Sort by score (descending - highest score first)
     recipesWithScores.sort((a, b) => b.score - a.score);
 
     // Diversify: Limit recipes per author to ensure variety
+    // This prevents one popular creator from dominating the feed
     const authorCountMap = new Map();
     const diversifiedRecipes = [];
+    const maxPerAuthor = 3; // Increased from 2 to allow more variety while still diversifying
     
     for (const recipe of recipesWithScores) {
       const authorId = recipe.user_id;
       const authorCount = authorCountMap.get(authorId) || 0;
       
-      // Allow max 2 recipes per author in top results, or if score is very high
-      if (authorCount < 2 || recipe.score > 120) {
+      // Allow max recipes per author, or if score is exceptionally high (top 10%)
+      const scoreThreshold = recipesWithScores.length > 10 
+        ? recipesWithScores[Math.floor(recipesWithScores.length * 0.1)].score 
+        : recipe.score;
+      
+      if (authorCount < maxPerAuthor || recipe.score >= scoreThreshold) {
         diversifiedRecipes.push(recipe);
         authorCountMap.set(authorId, authorCount + 1);
         
-        if (diversifiedRecipes.length >= limit) {
+        // Get enough for pagination (limit + offset)
+        if (diversifiedRecipes.length >= limit + offset) {
           break;
         }
       }
     }
+    
+    // Apply pagination
+    const paginatedRecipes = diversifiedRecipes.slice(offset, offset + limit);
 
     // Get author profiles
-    const authorIds = [...new Set(diversifiedRecipes.map(recipe => recipe.user_id))];
+    const authorIds = [...new Set(paginatedRecipes.map(recipe => recipe.user_id))];
     const { data: authors, error: authorError } = await supabase
       .from('profiles')
       .select('id, display_name, username, avatar_url')
@@ -524,15 +542,15 @@ router.get('/feed', async (req, res) => {
     const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
     const bookmarkedRecipeIds = new Set();
     
-    // Match diversified recipes by title to see if user has bookmarked (copied) them
-    diversifiedRecipes.forEach(recipe => {
+    // Match paginated recipes by title to see if user has bookmarked (copied) them
+    paginatedRecipes.forEach(recipe => {
       if (userRecipeTitles.has(recipe.title)) {
         bookmarkedRecipeIds.add(recipe.id);
       }
     });
 
     // Format final results
-    const results = diversifiedRecipes.map(recipe => ({
+    const results = paginatedRecipes.map(recipe => ({
       ...recipe,
       author: authorMap.get(recipe.user_id) || null,
       is_favorited: currentUserFavoriteIds.has(recipe.id),
@@ -542,7 +560,12 @@ router.get('/feed', async (req, res) => {
       created_time: undefined,
     }));
 
-    res.json(results);
+    // Return results with pagination metadata
+    res.json({
+      recipes: results,
+      has_more: diversifiedRecipes.length > offset + limit,
+      next_offset: results.length === limit ? offset + limit : null,
+    });
   } catch (error) {
     console.error('[social/feed] Error:', error);
     res.status(500).json({ error: 'Failed to load social feed' });

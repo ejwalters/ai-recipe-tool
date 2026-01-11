@@ -292,8 +292,10 @@ export default function SocialScreen() {
       if (!feedRefreshing) {
         setLoadingFeed(true);
       }
-      const results = await socialService.getFeed(40);
-      setFeed(Array.isArray(results) ? results : []);
+      const response = await socialService.getFeed(40);
+      // Handle both old format (array) and new format (object with recipes array)
+      const recipes = Array.isArray(response) ? response : (response?.recipes || []);
+      setFeed(recipes);
       if (isInitial || !feedLoadedRef.current) {
         feedLoadedRef.current = true;
       }

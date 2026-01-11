@@ -61,8 +61,11 @@ export const socialService = {
     return authenticatedFetch('/social/followers');
   },
 
-  async getFeed(limit = 20) {
-    const params = new URLSearchParams({ limit: `${limit}` });
+  async getFeed(limit = 40, offset = 0) {
+    const params = new URLSearchParams({ 
+      limit: `${limit}`,
+      offset: `${offset}`
+    });
     return authenticatedFetch(`/social/feed?${params.toString()}`);
   },
 
