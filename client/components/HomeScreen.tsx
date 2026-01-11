@@ -11,6 +11,91 @@ import RecentlyCookedSheet from './experimental/RecentlyCookedSheet';
 import Favorites from './experimental/Favorites';
 import ContextualSheet, { OriginRect } from './experimental/ContextualSheet';
 
+// Recipe Card Component for Search Results
+const RecipeSearchCard = ({ item, search, onPress }: { item: any; search: string; onPress: () => void }) => {
+  const [imageError, setImageError] = useState(false);
+  const title = item.title || 'Untitled Recipe';
+  
+  const renderHighlightedTitle = (text: string, searchTerm: string) => {
+    if (!searchTerm) {
+      return <CustomText style={styles.recipeCardTitle} numberOfLines={1}>{text}</CustomText>;
+    }
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {parts.map((part, i) => {
+          const isMatch = part.toLowerCase() === searchTerm.toLowerCase();
+          return (
+            <CustomText
+              key={i}
+              style={isMatch ? [styles.recipeCardTitle, styles.highlightedText] : styles.recipeCardTitle}
+            >
+              {part}
+            </CustomText>
+          );
+        })}
+      </View>
+    );
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.recipeCard}
+      activeOpacity={0.9}
+    >
+      {item.image_url && !imageError ? (
+        <Image
+          source={{ uri: item.image_url }}
+          style={styles.recipeCardImage}
+          resizeMode="cover"
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <View style={[styles.recipeCardImage, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="restaurant-outline" size={32} color="#9CA3AF" />
+        </View>
+      )}
+      <View style={styles.recipeCardContent}>
+        <View style={{ marginBottom: 8 }}>
+          {renderHighlightedTitle(title, search)}
+        </View>
+        <View style={styles.recipeCardMeta}>
+          <View style={styles.recipeCardMetaItem}>
+            <Ionicons name="time-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+            <CustomText style={styles.recipeCardMetaText}>
+              {item.time || item.prep_time || item.cooking_time || 'N/A'}
+              {item.time || item.prep_time || item.cooking_time ? ' min' : ''}
+            </CustomText>
+          </View>
+          <View style={styles.recipeCardMetaItem}>
+            <Ionicons name="flame-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
+            <CustomText style={styles.recipeCardMetaText}>
+              {item.calories || item.calorie_count ? `${item.calories || item.calorie_count} cal` : 'N/A'}
+            </CustomText>
+          </View>
+          <View style={styles.recipeCardMetaItem}>
+            <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
+            <CustomText style={styles.recipeCardMetaText}>
+              {item.rating || item.average_rating || '4.5'}
+            </CustomText>
+          </View>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.recipeCardArrow}
+        onPress={(e) => {
+          e.stopPropagation();
+          onPress();
+        }}
+      >
+        <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -213,45 +298,61 @@ export default function HomeScreen() {
                 onFocus={() => setSearchTouched(true)}
               />
             </View>
-            {/* Results dropdown */}
-            {searchTouched && search.length > 0 && (
+            {/* Results dropdown - hidden when showing full results */}
+            {searchTouched && search.length > 0 && searchResults.length === 0 && !searching && (
               <View style={styles.resultsDropdown}>
-                {searching ? (
-                  <View style={styles.loadingBox}>
-                    <Animated.Image
-                      source={require('../assets/images/fork-knife.png')}
-                      style={{ width: 32, height: 32, tintColor: '#6DA98C', transform: [{ scale: pulseAnim }] }}
-                    />
-                    <CustomText style={{ color: '#6DA98C', marginTop: 8, fontWeight: '600', fontSize: 14 }}>Searching...</CustomText>
-                  </View>
-                ) : !Array.isArray(searchResults) || searchResults.length === 0 ? (
-                  <CustomText style={{ textAlign: 'center', color: '#A0AEC0', marginTop: 12, marginBottom: 12, fontSize: 15 }}>
-                    No results for '{search}'
-                  </CustomText>
-                ) : (
-                  <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
-                    {searchResults.slice(0, 8).map((item, idx) => (
-                      <TouchableOpacity
-                        key={item.id || item.title || idx}
-                        onPress={() => { router.push({ pathname: '/recipe-detail', params: { id: item.id } }); closeDropdown(); }}
-                        style={styles.resultItem}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.resultRow}>
-                          <Ionicons name="restaurant-outline" size={18} color="#6DA98C" style={{ marginRight: 10 }} />
-                          <CustomText style={styles.resultText}>{item.title}</CustomText>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
+                <CustomText style={{ textAlign: 'center', color: '#A0AEC0', marginTop: 12, marginBottom: 12, fontSize: 15 }}>
+                  No results for '{search}'
+                </CustomText>
               </View>
             )}
           </View>
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
+            {/* Search Results Section */}
+            {searchTouched && search.length > 0 && (
+              <View style={styles.searchResultsSection}>
+                <View style={styles.searchResultsHeader}>
+                  <CustomText style={styles.searchResultsTitle}>Top Matches</CustomText>
+                  {searchResults.length > 0 && (
+                    <TouchableOpacity onPress={() => {
+                      router.push({ pathname: '/recipes', params: { search } });
+                      closeDropdown();
+                    }}>
+                      <CustomText style={styles.seeAllLink}>See all</CustomText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {searching ? (
+                  <View style={styles.searchLoadingContainer}>
+                    <Animated.Image
+                      source={require('../assets/images/fork-knife.png')}
+                      style={{ width: 32, height: 32, tintColor: '#4CAF50', transform: [{ scale: pulseAnim }] }}
+                    />
+                    <CustomText style={styles.searchLoadingText}>Searching...</CustomText>
+                  </View>
+                ) : searchResults.length > 0 ? (
+                  <View style={styles.searchResultsList}>
+                    {searchResults.slice(0, 4).map((item, idx) => (
+                      <RecipeSearchCard
+                        key={item.id || item.title || idx}
+                        item={item}
+                        search={search}
+                        onPress={() => {
+                          router.push({ pathname: '/recipe-detail', params: { id: item.id } });
+                          closeDropdown();
+                        }}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            )}
+
             {/* Main Action Grid */}
-            <View style={styles.gridContainer}>
+            {(!searchTouched || search.length === 0) && (
+              <View style={styles.gridContainer}>
               <TouchableOpacity style={[styles.gridCard, styles.gridCardGreen]} onPress={() => router.push('/chat')} activeOpacity={0.92}>
                 <Ionicons name="sparkles" size={32} color="#fff" style={styles.gridIcon} />
                 <CustomText style={styles.gridCardTitle}>Ask AI Chef</CustomText>
@@ -301,6 +402,7 @@ export default function HomeScreen() {
                 <CustomText style={styles.gridCardDesc}>Random recipe idea</CustomText>
               </TouchableOpacity>
             </View>
+            )}
           </ScrollView>
         </View>
 
@@ -487,5 +589,98 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
     marginBottom: 2,
+  },
+  searchResultsSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  searchResultsTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: -0.3,
+  },
+  seeAllLink: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  searchLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  searchLoadingText: {
+    color: '#4CAF50',
+    marginTop: 12,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  searchResultsList: {
+    // gap handled by marginBottom in recipeCard
+  },
+  recipeCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  recipeCardImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    marginRight: 12,
+  },
+  recipeCardContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  recipeCardTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1F2937',
+    lineHeight: 22,
+  },
+  highlightedText: {
+    color: '#4CAF50',
+    fontWeight: '700',
+  },
+  recipeCardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeCardMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  recipeCardMetaText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  recipeCardArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
 }); 

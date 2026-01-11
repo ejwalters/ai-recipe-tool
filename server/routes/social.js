@@ -96,9 +96,39 @@ router.get('/search', async (req, res) => {
       }
     }
 
+    // Get follower counts for each user
+    const followerCountPromises = targetIds.map(userId =>
+      supabase
+        .from('social_follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('followee_id', userId)
+    );
+
+    const followerCountResults = await Promise.all(followerCountPromises);
+    const followerCountMap = new Map();
+    followerCountResults.forEach((result, index) => {
+      followerCountMap.set(targetIds[index], result.count || 0);
+    });
+
+    // Get recipe counts for each user
+    const recipeCountPromises = targetIds.map(userId =>
+      supabase
+        .from('recipes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+    );
+
+    const recipeCountResults = await Promise.all(recipeCountPromises);
+    const recipeCountMap = new Map();
+    recipeCountResults.forEach((result, index) => {
+      recipeCountMap.set(targetIds[index], result.count || 0);
+    });
+
     const results = data.map(profile => ({
       ...profile,
       is_following: followingIds.includes(profile.id),
+      follower_count: followerCountMap.get(profile.id) || 0,
+      recipes_count: recipeCountMap.get(profile.id) || 0,
     }));
 
     res.json(results);

@@ -45,7 +45,7 @@ type UserResult = {
   avatar_url?: string | null;
   is_following?: boolean;
   follower_count?: number | null;
-  recipe_count?: number | null;
+  recipes_count?: number | null;
   profession?: string | null;
 };
 
@@ -609,7 +609,7 @@ export default function SocialScreen() {
       const username = item.username || 'chef';
       const profession = item.profession || null;
       const followerCount = formatNumber(item.follower_count);
-      const recipeCount = formatNumber(item.recipe_count);
+      const recipeCount = formatNumber(item.recipes_count);
 
       return (
         <TouchableOpacity
