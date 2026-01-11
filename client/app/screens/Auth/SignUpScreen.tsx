@@ -75,13 +75,33 @@ const SignUpScreen = () => {
             
             try {
                 const API_BASE_URL = 'https://familycooksclean.onrender.com';
-                const response = await fetch(`${API_BASE_URL}/profiles/check-username?username=${encodeURIComponent(normalizedUsername)}`);
+                const url = `${API_BASE_URL}/profiles/check-username?username=${encodeURIComponent(normalizedUsername)}`;
+                console.log('[usernameCheck] Fetching:', url);
                 
-                if (!response.ok) {
-                    throw new Error('Failed to check username');
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                }).catch((fetchError) => {
+                    console.error('[usernameCheck] Fetch error:', fetchError);
+                    throw fetchError;
+                });
+                
+                console.log('[usernameCheck] Response status:', response?.status);
+                
+                if (!response || !response.ok) {
+                    const errorText = response ? await response.text().catch(() => 'No error text') : 'No response';
+                    console.error('[usernameCheck] Response error:', response?.status, errorText);
+                    throw new Error(`Failed to check username: ${response?.status || 'Network error'} ${errorText}`);
                 }
 
-                const result = await response.json();
+                const result = await response.json().catch((jsonError) => {
+                    console.error('[usernameCheck] JSON parse error:', jsonError);
+                    throw new Error('Invalid response from server');
+                });
+                
+                console.log('[usernameCheck] Result:', result);
 
                 if (result.available === false) {
                     setUsernameStatus('taken');
@@ -92,8 +112,10 @@ const SignUpScreen = () => {
                 }
             } catch (error) {
                 console.error('[usernameCheck] Unexpected error:', error);
-                setUsernameStatus('idle');
-                setUsernameError('');
+                console.error('[usernameCheck] Error details:', error?.message, error?.stack);
+                // Don't reset status on error - keep current state
+                // setUsernameStatus('idle');
+                // setUsernameError('');
             }
         }, 500);
 
