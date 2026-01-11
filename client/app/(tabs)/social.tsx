@@ -284,6 +284,7 @@ export default function SocialScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSearchedRef = useRef(false); // Track if user has performed at least one search
+  const suggestedLoadedRef = useRef(false); // Track if suggested creators have been loaded
 
   const loadFeed = useCallback(async (isInitial = false) => {
     setFeedError(null);
@@ -335,7 +336,15 @@ export default function SocialScreen() {
 
   // Load suggested creators when discover tab is active and search is empty
   useEffect(() => {
-    if (activeSegment === 'discover' && !searchTerm.trim() && suggestedCreators.length === 0 && !loadingSuggested) {
+    if (activeSegment !== 'discover') {
+      // Reset when switching away from discover so we can reload when switching back
+      suggestedLoadedRef.current = false;
+      return;
+    }
+
+    // Only load if search is empty and we haven't loaded yet
+    if (!searchTerm.trim() && !suggestedLoadedRef.current) {
+      suggestedLoadedRef.current = true; // Set immediately to prevent duplicate calls
       setLoadingSuggested(true);
       socialService.getSuggestedCreators()
         .then(results => {
@@ -348,7 +357,7 @@ export default function SocialScreen() {
           setLoadingSuggested(false);
         });
     }
-  }, [activeSegment, searchTerm, suggestedCreators.length, loadingSuggested]);
+  }, [activeSegment, searchTerm]);
 
   useEffect(() => {
     if (activeSegment !== 'discover') {
