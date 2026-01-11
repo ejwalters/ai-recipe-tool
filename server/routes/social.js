@@ -160,26 +160,7 @@ router.get('/search', async (req, res) => {
         uniqueMap.set(profile.id, profile);
       }
     });
-    // Sort by relevance: startsWith matches first, then contains matches
-    // Then by recipe_count desc, then follower_count desc, then name
-    const queryLower = query.toLowerCase();
-    const data = Array.from(uniqueMap.values())
-      .sort((a, b) => {
-        const aName = (a.display_name || a.username || '').toLowerCase();
-        const bName = (b.display_name || b.username || '').toLowerCase();
-        const aHandle = (a.username || '').toLowerCase();
-        const bHandle = (b.username || '').toLowerCase();
-        
-        // Prioritize startsWith matches
-        const aStartsWith = aName.startsWith(queryLower) || aHandle.startsWith(queryLower);
-        const bStartsWith = bName.startsWith(queryLower) || bHandle.startsWith(queryLower);
-        if (aStartsWith && !bStartsWith) return -1;
-        if (!aStartsWith && bStartsWith) return 1;
-        
-        // Then sort by name
-        return aName.localeCompare(bName);
-      })
-      .slice(0, 25);
+    const data = Array.from(uniqueMap.values()).slice(0, 25);
 
     // Mark which of these users are already followed
     const targetIds = data.map(profile => profile.id);
