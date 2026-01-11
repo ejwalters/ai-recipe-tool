@@ -20,6 +20,43 @@ const authenticateUser = async (req, res, next) => {
   next();
 };
 
+// Check username availability (public endpoint, no auth required)
+router.get('/check-username', async (req, res) => {
+  const { username } = req.query;
+  
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  // Validate format
+  const usernamePattern = /^[a-z0-9_]+$/i;
+  const trimmedUsername = username.trim();
+  if (!usernamePattern.test(trimmedUsername) || trimmedUsername.length < 3) {
+    return res.json({ available: false, reason: 'Invalid format' });
+  }
+
+  try {
+    const normalizedUsername = trimmedUsername.toLowerCase();
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('username', normalizedUsername);
+
+    if (error) {
+      console.error('[profiles/check-username] Error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ 
+      available: (count ?? 0) === 0,
+      username: normalizedUsername
+    });
+  } catch (error) {
+    console.error('[profiles/check-username] Unexpected error:', error);
+    res.status(500).json({ error: 'Failed to check username' });
+  }
+});
+
 // Get profile
 router.get('/', authenticateUser, async (req, res) => {
   try {
