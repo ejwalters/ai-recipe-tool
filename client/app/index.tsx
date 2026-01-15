@@ -9,18 +9,46 @@ export default function Index() {
     const router = useRouter();
 
     useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => {
-            if (data?.user) {
-                router.replace('/(tabs)');
+        let mounted = true;
+        let timeoutId: NodeJS.Timeout;
+
+        // Set a timeout to ensure we don't hang forever
+        timeoutId = setTimeout(() => {
+            if (mounted) {
+                console.log('Session check timeout - showing login screen');
+                setLoading(false);
             }
-            setLoading(false);
-        });
+        }, 1000);
+
+        // Check for existing session
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                clearTimeout(timeoutId);
+                if (!mounted) return;
+                
+                if (session?.user) {
+                    router.replace('/(tabs)');
+                }
+                setLoading(false);
+            })
+            .catch((error) => {
+                clearTimeout(timeoutId);
+                console.error('Session check error:', error);
+                if (mounted) {
+                    setLoading(false);
+                }
+            });
+
+        return () => {
+            mounted = false;
+            clearTimeout(timeoutId);
+        };
     }, []);
 
     if (loading) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F6F9' }}>
-                <ActivityIndicator size="large" color="#6DA98C" />
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#E5F3EC' }}>
+                <ActivityIndicator size="large" color="#256D85" />
             </View>
         );
     }

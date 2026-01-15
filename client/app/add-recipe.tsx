@@ -1,28 +1,46 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AddRecipeScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#F3F0FF" translucent={Platform.OS === 'android'} />
             <Stack.Screen options={{ headerShown: false }} />
             
             {/* Header */}
-            <View style={styles.headerBg}>
+            <View style={[styles.headerBg, { paddingTop: insets.top + 20 }]}>
                 <View style={styles.headerRow}>
                     <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={26} color="#222" />
+                        <View style={styles.backButtonCircle}>
+                            <Ionicons name="arrow-back" size={20} color="#1F2937" />
+                        </View>
                     </TouchableOpacity>
-                    <CustomText style={styles.logoText}>🍳</CustomText>
                     <View style={{ flex: 1 }} />
+                    <TouchableOpacity style={styles.searchButton}>
+                        <View style={styles.searchButtonCircle}>
+                            <Ionicons name="search" size={20} color="#1F2937" />
+                        </View>
+                    </TouchableOpacity>
                 </View>
-                <CustomText style={styles.headerText}>Add a Recipe</CustomText>
-                <CustomText style={styles.subHeader}>Choose how you'd like to add your recipe</CustomText>
+                
+                <View style={styles.headerContent}>
+                    <View style={styles.headerTextContainer}>
+                        <CustomText style={styles.headerText}>Add a New Recipe</CustomText>
+                        <CustomText style={styles.subHeader}>
+                            Choose the easiest way for you to build your digital cookbook.
+                        </CustomText>
+                    </View>
+                    <View style={styles.illustrationContainer}>
+                        <CustomText style={styles.cookbookEmoji}>📖</CustomText>
+                    </View>
+                </View>
             </View>
 
             {/* Main Content */}
@@ -34,55 +52,57 @@ export default function AddRecipeScreen() {
                 >
                     {/* Option Cards */}
                     <View style={styles.cardsContainer}>
+                        {/* Scan Recipe */}
                         <TouchableOpacity 
-                            style={[styles.optionCard, styles.cardGreen]} 
-                            activeOpacity={0.92}
+                            style={styles.optionCard} 
+                            activeOpacity={0.9}
                             onPress={() => router.push('/add-recipe-photo')}
                         >
-                            <View style={styles.cardIconContainer}>
-                                <View style={styles.iconBackground}>
-                                    <Ionicons name="camera" size={28} color="#2D5A4A" />
-                                </View>
+                            <View style={[styles.iconSquare, styles.iconGreen]}>
+                                <Ionicons name="camera" size={24} color="#FFFFFF" />
                             </View>
                             <View style={styles.cardContent}>
-                                <CustomText style={styles.cardTitle}>Take a Photo</CustomText>
-                                <CustomText style={styles.cardDescription}>Snap a photo of a physical recipe card or cookbook page</CustomText>
+                                <CustomText style={styles.cardTitle}>Scan Recipe</CustomText>
+                                <CustomText style={styles.cardDescription}>
+                                    Snap a photo of a cookbook page or physical recipe card.
+                                </CustomText>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6B7280" style={styles.chevron} />
+                            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" style={styles.chevron} />
                         </TouchableOpacity>
 
+                        {/* Add Manually */}
                         <TouchableOpacity 
-                            style={[styles.optionCard, styles.cardPurple]} 
-                            activeOpacity={0.92}
+                            style={styles.optionCard} 
+                            activeOpacity={0.9}
                             onPress={() => router.push('/add-recipe-manual')}
                         >
-                            <View style={styles.cardIconContainer}>
-                                <View style={[styles.iconBackground, styles.iconBgPurple]}>
-                                    <Ionicons name="create-outline" size={28} color="#5A5A8B" />
-                                </View>
+                            <View style={[styles.iconSquare, styles.iconPurple]}>
+                                <Ionicons name="create-outline" size={24} color="#FFFFFF" />
                             </View>
                             <View style={styles.cardContent}>
                                 <CustomText style={styles.cardTitle}>Add Manually</CustomText>
-                                <CustomText style={styles.cardDescription}>Create a recipe from scratch with your own ingredients and steps</CustomText>
+                                <CustomText style={styles.cardDescription}>
+                                    Create from scratch with your own ingredients and steps.
+                                </CustomText>
                             </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6B7280" style={styles.chevron} />
+                            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" style={styles.chevron} />
                         </TouchableOpacity>
                     </View>
 
-                    {/* Help Section */}
-                    <View style={styles.helpSection}>
-                        <View style={styles.helpHeader}>
-                            <Ionicons name="information-circle-outline" size={20} color="#6DA98C" />
-                            <CustomText style={styles.helpTitle}>Quick Tips</CustomText>
+                    {/* Quick Tips Section */}
+                    <View style={styles.quickTipsSection}>
+                        <View style={styles.quickTipsHeader}>
+                            <Ionicons name="bulb-outline" size={20} color="#EA580C" />
+                            <CustomText style={styles.quickTipsTitle}>Quick Tips</CustomText>
                         </View>
-                        <CustomText style={styles.helpText}>
-                            • Photos work best with clear, well-lit recipe cards{'\n'}
-                            • Manual entry gives you full control over your recipe
+                        <CustomText style={styles.quickTipsText}>
+                            • Photos work best with clear, well-lit recipe cards placed on a flat surface.{'\n'}
+                            • Manual entry gives you full control over formatting and details.
                         </CustomText>
                     </View>
                 </ScrollView>
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -93,8 +113,7 @@ const styles = StyleSheet.create({
     },
     headerBg: {
         backgroundColor: '#F3F0FF',
-        paddingTop: 60,
-        paddingBottom: 24,
+        paddingBottom: 32,
         paddingHorizontal: 24,
         borderBottomLeftRadius: 32,
         borderBottomRightRadius: 32,
@@ -102,51 +121,89 @@ const styles = StyleSheet.create({
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 24,
     },
     backButton: {
-        marginRight: 8,
         padding: 4,
     },
-    logoText: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#222',
-        letterSpacing: 0.5,
+    backButtonCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    searchButton: {
+        padding: 4,
+    },
+    searchButtonCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+    },
+    headerTextContainer: {
+        flex: 1,
+        marginRight: 16,
     },
     headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
+        fontSize: 32,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 8,
         letterSpacing: -0.5,
     },
     subHeader: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
+        fontWeight: '400',
+        lineHeight: 22,
+    },
+    illustrationContainer: {
+        width: 80,
+        height: 80,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cookbookEmoji: {
+        fontSize: 64,
     },
     contentContainer: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
+        backgroundColor: '#FFFFFF',
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
+        paddingTop: 24,
         paddingBottom: 32,
-        marginTop: 24,
     },
     cardsContainer: {
-        paddingHorizontal: 18,
-        marginBottom: 24,
+        paddingHorizontal: 24,
+        marginBottom: 32,
     },
     optionCard: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
         marginBottom: 16,
         padding: 20,
         flexDirection: 'row',
@@ -155,80 +212,70 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 2,
-        borderLeftWidth: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
     },
-    cardGreen: {
-        borderLeftColor: '#B6E2D3',
-    },
-    cardYellow: {
-        borderLeftColor: '#FFF3C4',
-    },
-    cardPurple: {
-        borderLeftColor: '#D6D6F7',
-    },
-    cardIconContainer: {
-        marginRight: 16,
-    },
-    iconBackground: {
+    iconSquare: {
         width: 56,
         height: 56,
-        borderRadius: 16,
-        backgroundColor: '#E6F6F0',
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+        marginRight: 16,
     },
-    iconBgYellow: {
-        backgroundColor: '#FFFBE7',
+    iconGreen: {
+        backgroundColor: '#10B981',
     },
-    iconBgPurple: {
-        backgroundColor: '#F0F0FB',
+    iconPurple: {
+        backgroundColor: '#8B5CF6',
+    },
+    iconBlue: {
+        backgroundColor: '#3B82F6',
     },
     cardContent: {
         flex: 1,
     },
     cardTitle: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
+        fontWeight: '600',
+        color: '#1F2937',
         marginBottom: 4,
-        letterSpacing: -0.3,
+        letterSpacing: -0.2,
     },
     cardDescription: {
         fontSize: 14,
         color: '#6B7280',
-        fontWeight: '500',
+        fontWeight: '400',
         lineHeight: 20,
     },
     chevron: {
-        marginLeft: 8,
+        marginLeft: 12,
     },
-    helpSection: {
-        backgroundColor: '#fff',
-        marginHorizontal: 18,
+    quickTipsSection: {
+        backgroundColor: '#FFF7ED',
+        marginHorizontal: 24,
         borderRadius: 16,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
     },
-    helpHeader: {
+    quickTipsHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
     },
-    helpTitle: {
+    quickTipsTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#222',
+        color: '#EA580C',
         marginLeft: 8,
+        letterSpacing: -0.2,
     },
-    helpText: {
+    quickTipsText: {
         fontSize: 14,
-        color: '#6B7280',
+        color: '#9A3412',
+        fontWeight: '400',
         lineHeight: 20,
-        fontWeight: '500',
     },
-}); 
+});
