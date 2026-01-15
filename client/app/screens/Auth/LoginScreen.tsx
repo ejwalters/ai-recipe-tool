@@ -9,17 +9,24 @@ import {
     ScrollView,
     Alert,
     Image,
+    ActivityIndicator,
 } from 'react-native';
 import CustomText from '../../../components/CustomText';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+
+// Complete the OAuth session in the browser
+WebBrowser.maybeCompleteAuthSession();
 
 const LoginScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [loadingGoogle, setLoadingGoogle] = useState(false);
     const router = useRouter();
 
     const handleLogin = async () => {
@@ -38,6 +45,117 @@ const LoginScreen = () => {
     const handleForgotPassword = () => {
         // TODO: Implement forgot password flow
         Alert.alert('Forgot Password', 'Password reset feature coming soon!');
+    };
+
+    const handleGoogleSignIn = async () => {
+        try {
+            setLoadingGoogle(true);
+
+            // Get the redirect URL for your app using the custom scheme
+            // For Expo, we need to explicitly use the scheme from app.config.js
+            const redirectUrl = Platform.select({
+                ios: 'airecipetool://',
+                android: 'airecipetool://',
+                default: Linking.createURL('/'),
+            });
+            
+            console.log('OAuth redirect URL:', redirectUrl);
+            
+            // Start the OAuth flow
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: redirectUrl,
+                    skipBrowserRedirect: false,
+                },
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            if (data?.url) {
+                // Open the OAuth URL in the browser
+                const result = await WebBrowser.openAuthSessionAsync(
+                    data.url,
+                    redirectUrl
+                );
+
+                // Handle the result
+                if (result.type === 'success') {
+                    // Parse the URL to extract tokens
+                    const url = result.url;
+                    console.log('OAuth callback URL:', url);
+                    
+                    // Supabase adds tokens in the URL hash fragment
+                    // Extract the hash part if present
+                    const hashMatch = url.match(/#(.+)/);
+                    if (hashMatch) {
+                        // Parse hash fragment
+                        const hashParams = new URLSearchParams(hashMatch[1]);
+                        const accessToken = hashParams.get('access_token');
+                        const refreshToken = hashParams.get('refresh_token');
+                        
+                        if (accessToken && refreshToken) {
+                            // Set the session using the tokens
+                            const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken,
+                            });
+                            
+                            if (sessionError) {
+                                throw sessionError;
+                            }
+                            
+                            if (session) {
+                                // Success! User is authenticated
+                                router.replace('/(tabs)');
+                            } else {
+                                Alert.alert('Authentication Failed', 'Could not create session. Please try again.');
+                            }
+                        } else {
+                            // Try to get session anyway (Supabase might have handled it)
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                            
+                            if (sessionError) {
+                                throw sessionError;
+                            }
+                            
+                            if (session) {
+                                router.replace('/(tabs)');
+                            } else {
+                                Alert.alert('Authentication Failed', 'Could not create session. Please try again.');
+                            }
+                        }
+                    } else {
+                        // No hash fragment, try to get session anyway
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                        
+                        if (sessionError) {
+                            throw sessionError;
+                        }
+                        
+                        if (session) {
+                            router.replace('/(tabs)');
+                        } else {
+                            Alert.alert('Authentication Failed', 'Could not create session. Please try again.');
+                        }
+                    }
+                } else if (result.type === 'cancel') {
+                    // User cancelled - just close silently
+                    console.log('User cancelled Google sign in');
+                } else {
+                    Alert.alert('Authentication Failed', 'Could not complete sign in. Please try again.');
+                }
+            }
+        } catch (error: any) {
+            console.error('Google sign in error:', error);
+            Alert.alert('Sign In Failed', error.message || 'An error occurred during Google sign in.');
+        } finally {
+            setLoadingGoogle(false);
+        }
     };
 
     return (
@@ -148,15 +266,19 @@ const LoginScreen = () => {
                             {/* Social Login Buttons */}
                             <View style={styles.socialButtonsContainer}>
                                 <TouchableOpacity
-                                    style={styles.socialButton}
+                                    style={[styles.socialButton, loadingGoogle && styles.socialButtonDisabled]}
                                     activeOpacity={0.8}
-                                    onPress={() => {
-                                        // TODO: Implement Google sign in
-                                        Alert.alert('Google Sign In', 'Google sign in coming soon!');
-                                    }}
+                                    onPress={handleGoogleSignIn}
+                                    disabled={loadingGoogle}
                                 >
-                                    <Ionicons name="logo-google" size={20} color="#4285F4" style={styles.socialIconIonicons} />
-                                    <CustomText style={styles.socialButtonText}>Google</CustomText>
+                                    {loadingGoogle ? (
+                                        <ActivityIndicator size="small" color="#4285F4" />
+                                    ) : (
+                                        <Ionicons name="logo-google" size={20} color="#4285F4" style={styles.socialIconIonicons} />
+                                    )}
+                                    <CustomText style={styles.socialButtonText}>
+                                        {loadingGoogle ? 'Signing in...' : 'Google'}
+                                    </CustomText>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -389,6 +511,9 @@ const styles = StyleSheet.create({
         color: '#256D85',
         fontWeight: '600',
         textAlign: 'center',
+    },
+    socialButtonDisabled: {
+        opacity: 0.6,
     },
 });
 

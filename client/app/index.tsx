@@ -3,6 +3,7 @@ import LoginScreen from './screens/Auth/LoginScreen';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { ActivityIndicator, View } from 'react-native';
+import * as Linking from 'expo-linking';
 
 export default function Index() {
     const [loading, setLoading] = useState(true);
@@ -11,6 +12,41 @@ export default function Index() {
     useEffect(() => {
         let mounted = true;
         let timeoutId: NodeJS.Timeout;
+
+        // Handle OAuth redirects from deep links
+        const handleDeepLink = async (url: string) => {
+            if (!mounted) return;
+            
+            // Parse the URL to check if it's an OAuth callback
+            const parsedUrl = Linking.parse(url);
+            
+            // Check if this is an OAuth callback (Supabase adds these params)
+            if (parsedUrl.queryParams?.access_token || parsedUrl.queryParams?.code || parsedUrl.path?.includes('auth/callback')) {
+                // Wait a moment for Supabase to process the session
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user && mounted) {
+                    router.replace('/(tabs)');
+                    setLoading(false);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Check for initial URL (app opened via deep link)
+        Linking.getInitialURL().then(async (url) => {
+            if (url) {
+                const handled = await handleDeepLink(url);
+                if (handled) return;
+            }
+        });
+
+        // Listen for deep links while app is running
+        const subscription = Linking.addEventListener('url', async (event) => {
+            await handleDeepLink(event.url);
+        });
 
         // Set a timeout to ensure we don't hang forever
         timeoutId = setTimeout(() => {
@@ -42,6 +78,7 @@ export default function Index() {
         return () => {
             mounted = false;
             clearTimeout(timeoutId);
+            subscription.remove();
         };
     }, []);
 
