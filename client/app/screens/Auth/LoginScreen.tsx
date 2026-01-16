@@ -67,6 +67,9 @@ const LoginScreen = () => {
                 options: {
                     redirectTo: redirectUrl,
                     skipBrowserRedirect: false,
+                    queryParams: {
+                        prompt: 'select_account', // Force account picker every time
+                    },
                 },
             });
 

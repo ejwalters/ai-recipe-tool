@@ -453,7 +453,16 @@ export default function SocialScreen() {
 
   const handleFollowToggle = useCallback(async (user: UserResult) => {
     const optimisticValue = !user.is_following;
+    
+    // Update search results if user is in search results
     setSearchResults(prev =>
+      prev.map(item =>
+        item.id === user.id ? { ...item, is_following: optimisticValue } : item
+      )
+    );
+    
+    // Update suggested creators if user is in suggested creators
+    setSuggestedCreators(prev =>
       prev.map(item =>
         item.id === user.id ? { ...item, is_following: optimisticValue } : item
       )
@@ -468,7 +477,16 @@ export default function SocialScreen() {
     } catch (error: any) {
       console.log('[social] follow toggle error', error);
       Alert.alert('Action Failed', 'Please try again.');
+      
+      // Revert search results
       setSearchResults(prev =>
+        prev.map(item =>
+          item.id === user.id ? { ...item, is_following: !optimisticValue } : item
+        )
+      );
+      
+      // Revert suggested creators
+      setSuggestedCreators(prev =>
         prev.map(item =>
           item.id === user.id ? { ...item, is_following: !optimisticValue } : item
         )
