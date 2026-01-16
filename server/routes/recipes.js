@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
+const { getRecipeIconConfig } = require('../utils/recipeIcons');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -10,9 +11,21 @@ router.post('/add', async (req, res) => {
     if (!user_id || !title || !ingredients || !steps) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
+    
+    // Compute icon configuration based on title and tags
+    const iconConfig = getRecipeIconConfig(title, tags || []);
+    
     const { data, error } = await supabase
         .from('recipes')
-        .insert([{ user_id, title, time, tags, ingredients, steps }])
+        .insert([{ 
+            user_id, 
+            title, 
+            time, 
+            tags, 
+            ingredients, 
+            steps,
+            ...iconConfig
+        }])
         .select()
         .single();
     if (error) return res.status(500).json({ error: error.message });
@@ -43,10 +56,20 @@ router.put('/:id', async (req, res) => {
         return res.status(403).json({ error: 'You can only edit your own recipes' });
     }
 
-    // Update the recipe
+    // Compute icon configuration based on updated title and tags
+    const iconConfig = getRecipeIconConfig(title, tags || []);
+    
+    // Update the recipe (including icon config)
     const { data, error } = await supabase
         .from('recipes')
-        .update({ title, time, tags, ingredients, steps })
+        .update({ 
+            title, 
+            time, 
+            tags, 
+            ingredients, 
+            steps,
+            ...iconConfig
+        })
         .eq('id', id)
         .select()
         .single();
@@ -350,6 +373,16 @@ router.post('/bookmark', async (req, res) => {
             return res.json({ success: true, recipe_id: existingCopy[0].id, already_exists: true });
         }
 
+        // Compute icon config (use original's if it exists, otherwise compute)
+        const iconConfig = originalRecipe.icon_name && originalRecipe.icon_library
+            ? {
+                icon_library: originalRecipe.icon_library,
+                icon_name: originalRecipe.icon_name,
+                icon_bg_color: originalRecipe.icon_bg_color,
+                icon_color: originalRecipe.icon_color,
+            }
+            : getRecipeIconConfig(originalRecipe.title, originalRecipe.tags || []);
+        
         // Copy the recipe to the user's recipes
         const { data: copiedRecipe, error: insertError } = await supabase
             .from('recipes')
@@ -360,6 +393,7 @@ router.post('/bookmark', async (req, res) => {
                 tags: originalRecipe.tags,
                 ingredients: originalRecipe.ingredients,
                 steps: originalRecipe.steps,
+                ...iconConfig
             }])
             .select()
             .single();

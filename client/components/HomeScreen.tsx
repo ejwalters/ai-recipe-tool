@@ -1,20 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Keyboard, TouchableWithoutFeedback, Platform, Easing } from 'react-native';
+import { View, TextInput, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Keyboard, TouchableWithoutFeedback, Platform, Easing, Dimensions, FlatList } from 'react-native';
 import CustomText from './CustomText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { profileService } from '../lib/profileService';
 import RecentlyCookedSheet from './experimental/RecentlyCookedSheet';
 import Favorites from './experimental/Favorites';
 import ContextualSheet, { OriginRect } from './experimental/ContextualSheet';
+import { getRecipeIconConfig, getDifficultyLevel } from '../utils/recipeIcons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-// Recipe Card Component for Search Results
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.38; // Compact tiles for recently cooked
+
+// Recipe Card Component for Search Results - Enhanced
 const RecipeSearchCard = ({ item, search, onPress }: { item: any; search: string; onPress: () => void }) => {
   const [imageError, setImageError] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   const title = item.title || 'Untitled Recipe';
+  
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+      friction: 3,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 3,
+    }).start();
+  };
   
   const renderHighlightedTitle = (text: string, searchTerm: string) => {
     if (!searchTerm) {
@@ -40,70 +62,203 @@ const RecipeSearchCard = ({ item, search, onPress }: { item: any; search: string
   };
 
   return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.recipeCard}
+        activeOpacity={0.95}
+      >
+        {item.image_url && !imageError ? (
+          <Image
+            source={{ uri: item.image_url }}
+            style={styles.recipeCardImage}
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <View style={[styles.recipeCardImage, styles.recipeCardImagePlaceholder]}>
+            <Ionicons name="restaurant-outline" size={28} color="#9CA3AF" />
+          </View>
+        )}
+        <View style={styles.recipeCardContent}>
+          <View style={{ marginBottom: 10 }}>
+            {renderHighlightedTitle(title, search)}
+          </View>
+          <View style={styles.recipeCardMeta}>
+            {item.time && (
+              <View style={styles.recipeCardMetaItem}>
+                <Ionicons name="time-outline" size={13} color="#6B7280" style={{ marginRight: 4 }} />
+                <CustomText style={styles.recipeCardMetaText}>
+                  {item.time} min
+                </CustomText>
+              </View>
+            )}
+            {item.calories && (
+              <View style={styles.recipeCardMetaItem}>
+                <Ionicons name="flame-outline" size={13} color="#6B7280" style={{ marginRight: 4 }} />
+                <CustomText style={styles.recipeCardMetaText}>
+                  {item.calories} cal
+                </CustomText>
+              </View>
+            )}
+          </View>
+        </View>
+        <View style={styles.recipeCardArrow}>
+          <Ionicons name="chevron-forward" size={18} color="#256D85" />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// Horizontal Recipe Card Component (Recently Cooked style - colored square with icon)
+const HorizontalRecipeCard = ({ item, onPress, index = 0 }: { item: any; onPress: () => void; index?: number }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
+  const isFavorited = item.is_favorited || false;
+  
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      friction: 3,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 3,
+    }).start();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_WIDTH }}>
+      <TouchableOpacity
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.horizontalRecipeCardNew}
+        activeOpacity={0.95}
+      >
+        <View style={[styles.horizontalRecipeIconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
+          {iconConfig.library === 'MaterialCommunityIcons' ? (
+            <MaterialCommunityIcons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
+          ) : (
+            <Ionicons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
+          )}
+          {isFavorited && (
+            <View style={styles.favoriteBadge}>
+              <Ionicons name="heart" size={12} color="#EF4444" />
+            </View>
+          )}
+        </View>
+        <View style={styles.horizontalRecipeContentNew}>
+          <CustomText style={styles.horizontalRecipeTitleNew} numberOfLines={2}>
+            {item.title || 'Untitled Recipe'}
+          </CustomText>
+          <View style={styles.horizontalRecipeMetaNew}>
+            {item.time && (
+              <View style={styles.horizontalRecipeMetaItemNew}>
+                <Ionicons name="time-outline" size={12} color="#6B7280" />
+                <CustomText style={styles.horizontalRecipeMetaTextNew}>{item.time} min</CustomText>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// Vertical Favorite Recipe Card (for Your Favorites section)
+const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress: () => void; index?: number }) => {
+  const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
+  const difficulty = getDifficultyLevel(item);
+  const isFavorited = item.is_favorited !== false; // Default to true for favorites section
+  
+  return (
     <TouchableOpacity
       onPress={onPress}
-      style={styles.recipeCard}
+      style={styles.verticalFavoriteCard}
       activeOpacity={0.9}
     >
-      {item.image_url && !imageError ? (
-        <Image
-          source={{ uri: item.image_url }}
-          style={styles.recipeCardImage}
-          resizeMode="cover"
-          onError={() => setImageError(true)}
-        />
-      ) : (
-        <View style={[styles.recipeCardImage, { backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }]}>
-          <Ionicons name="restaurant-outline" size={32} color="#9CA3AF" />
+      <View style={[styles.verticalFavoriteIconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
+        {iconConfig.library === 'MaterialCommunityIcons' ? (
+          <MaterialCommunityIcons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
+        ) : (
+          <Ionicons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
+        )}
+      </View>
+      <View style={styles.verticalFavoriteContent}>
+        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1}>
+          {item.title || 'Untitled Recipe'}
+        </CustomText>
+        <View style={styles.verticalFavoriteMeta}>
+          {item.time && (
+            <View style={styles.verticalFavoriteMetaItem}>
+              <Ionicons name="time-outline" size={14} color="#6B7280" />
+              <CustomText style={styles.verticalFavoriteMetaText}>{item.time} min</CustomText>
+            </View>
+          )}
+          <View style={styles.verticalFavoriteMetaItem}>
+            <Ionicons name="flame-outline" size={14} color={difficulty.color} />
+            <CustomText style={[styles.verticalFavoriteMetaText, { color: difficulty.color }]}>
+              {difficulty.text}
+            </CustomText>
+          </View>
         </View>
-      )}
-      <View style={styles.recipeCardContent}>
-        <View style={{ marginBottom: 8 }}>
-          {renderHighlightedTitle(title, search)}
-        </View>
-        <View style={styles.recipeCardMeta}>
-          <View style={styles.recipeCardMetaItem}>
-            <Ionicons name="time-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
-            <CustomText style={styles.recipeCardMetaText}>
-              {item.time || item.prep_time || item.cooking_time || 'N/A'}
-              {item.time || item.prep_time || item.cooking_time ? ' min' : ''}
-            </CustomText>
+        {/* Social proof - friends cooked (placeholder for now) */}
+        <View style={styles.friendsCooked}>
+          <View style={styles.friendAvatars}>
+            <View style={[styles.friendAvatar, { backgroundColor: '#E5E7EB' }]} />
+            <View style={[styles.friendAvatar, { backgroundColor: '#D1D5DB', marginLeft: -8 }]} />
+            <View style={[styles.friendAvatar, { backgroundColor: '#9CA3AF', marginLeft: -8 }]} />
           </View>
-          <View style={styles.recipeCardMetaItem}>
-            <Ionicons name="flame-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
-            <CustomText style={styles.recipeCardMetaText}>
-              {item.calories || item.calorie_count ? `${item.calories || item.calorie_count} cal` : 'N/A'}
-            </CustomText>
-          </View>
-          <View style={styles.recipeCardMetaItem}>
-            <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
-            <CustomText style={styles.recipeCardMetaText}>
-              {item.rating || item.average_rating || '4.5'}
-            </CustomText>
-          </View>
+          <CustomText style={styles.friendsCookedText}>+12 friends cooked</CustomText>
         </View>
       </View>
-      <TouchableOpacity
-        style={styles.recipeCardArrow}
-        onPress={(e) => {
-          e.stopPropagation();
-          onPress();
-        }}
-      >
-        <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+      <TouchableOpacity style={styles.verticalFavoriteHeart} activeOpacity={0.7}>
+        <Ionicons name="heart" size={22} color="#EF4444" />
       </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
+
+// AI Chef Assistant Card Component
+const AIChefCard = ({ onPress }: { onPress: () => void }) => {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.aiChefCard}
+      activeOpacity={0.9}
+    >
+      <View style={styles.aiChefIconContainer}>
+        <Ionicons name="sparkles" size={28} color="#256D85" />
+      </View>
+      <View style={styles.aiChefContent}>
+        <CustomText style={styles.aiChefTitle}>AI Chef Assistant</CustomText>
+        <CustomText style={styles.aiChefDesc}>Get personalized recipe ideas</CustomText>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
     </TouchableOpacity>
   );
 };
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchTouched, setSearchTouched] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const dropdownAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const searchBarScale = useRef(new Animated.Value(1)).current;
   const [favorites, setFavorites] = useState<any[]>([]);
   const [recentlyCooked, setRecentlyCooked] = useState<any[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -171,6 +326,7 @@ export default function HomeScreen() {
       });
   };
 
+
   // Fetch data on mount and when userId changes
   useEffect(() => {
     fetchFavorites();
@@ -205,18 +361,28 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [search]);
 
+  // Animate search bar focus
+  useEffect(() => {
+    Animated.spring(searchBarScale, {
+      toValue: searchFocused ? 1.02 : 1,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 40,
+    }).start();
+  }, [searchFocused]);
+
   // Animate dropdown in/out
   useEffect(() => {
     if (searchTouched && search.length > 0) {
-      Animated.timing(dropdownAnim, {
+      Animated.spring(dropdownAnim, {
         toValue: 1,
-        duration: 220,
         useNativeDriver: true,
+        friction: 8,
       }).start();
     } else {
       Animated.timing(dropdownAnim, {
         toValue: 0,
-        duration: 180,
+        duration: 200,
         useNativeDriver: true,
       }).start();
     }
@@ -258,67 +424,120 @@ export default function HomeScreen() {
   function closeDropdown() {
     setSearch('');
     setSearchTouched(false);
+    setSearchFocused(false);
     setSearchResults([]);
     Keyboard.dismiss();
   }
 
-  const userName = profile?.name || 'there';
+  const userName = profile?.name?.split(' ')[0] || 'there';
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
     <TouchableWithoutFeedback onPress={closeDropdown} accessible={false}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
-        {/* Header always at the top, fills safe area */}
-        <View style={styles.headerBg}>
-          <View style={styles.headerRow}>
-            <CustomText style={styles.logoText}>🍳</CustomText>
-            <View style={{ flex: 1 }} />
-            <Image
-              source={profile?.avatar_url ? { uri: profile.avatar_url } : require('../assets/images/avatar.png')}
-              style={styles.avatar}
-            />
+      <View style={styles.container}>
+        <SafeAreaView style={{ flex: 0, backgroundColor: '#F3F0FF' }} edges={['top']}>
+          {/* Enhanced Header */}
+          <View style={[styles.headerBg, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
+            <View style={styles.headerRow}>
+              <View style={styles.logoContainer}>
+                <View style={styles.logoBadge}>
+                  <CustomText style={styles.logoText}>🍳</CustomText>
+                </View>
+              </View>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/profile')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.avatarContainer}>
+                  {profile?.avatar_url ? (
+                    <Image
+                      source={{ uri: profile.avatar_url }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <CustomText style={styles.avatarInitial}>
+                        {userName.charAt(0).toUpperCase()}
+                      </CustomText>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.greetingContainer}>
+              <CustomText style={styles.greetingTime}>{greeting}</CustomText>
+              <CustomText style={styles.greetingText}>{userName}!</CustomText>
+            </View>
           </View>
-          <CustomText style={styles.greetingText}>Hello, {userName} 👋</CustomText>
-          <CustomText style={styles.subGreeting}>What would you like to cook today?</CustomText>
-        </View>
+        </SafeAreaView>
 
-        {/* Main scrollable content */}
-        <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
-          {/* Floating Search Bar, overlaps header */}
-          <View style={styles.searchBarWrapper}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search" size={22} color="#B0B0B0" style={{ marginRight: 10 }} />
+        {/* Main Content */}
+        <View style={styles.contentWrapper}>
+          {/* Enhanced Search Bar */}
+          <Animated.View 
+            style={[
+              styles.searchBarWrapper,
+              { transform: [{ scale: searchBarScale }] }
+            ]}
+          >
+            <View style={[
+              styles.searchBar,
+              searchFocused && styles.searchBarFocused
+            ]}>
+              <Ionicons 
+                name="search" 
+                size={22} 
+                color={searchFocused ? "#256D85" : "#9CA3AF"} 
+                style={{ marginRight: 12 }} 
+              />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Ask or search for anything"
-                placeholderTextColor="#B0B0B0"
+                placeholder="Search recipes, ingredients, or ask AI..."
+                placeholderTextColor="#9CA3AF"
                 value={search}
                 onChangeText={t => { setSearch(t); setSearchTouched(true); }}
                 autoCorrect={false}
                 autoCapitalize="none"
-                onFocus={() => setSearchTouched(true)}
+                onFocus={() => {
+                  setSearchTouched(true);
+                  setSearchFocused(true);
+                }}
+                onBlur={() => setSearchFocused(false)}
               />
+              {search.length > 0 && (
+                <TouchableOpacity 
+                  onPress={closeDropdown}
+                  style={styles.searchClear}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
             </View>
-            {/* Results dropdown - hidden when showing full results */}
-            {searchTouched && search.length > 0 && searchResults.length === 0 && !searching && (
-              <View style={styles.resultsDropdown}>
-                <CustomText style={{ textAlign: 'center', color: '#A0AEC0', marginTop: 12, marginBottom: 12, fontSize: 15 }}>
-                  No results for '{search}'
-                </CustomText>
-              </View>
-            )}
-          </View>
+          </Animated.View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
-            {/* Search Results Section */}
+          <ScrollView 
+            style={styles.scrollView} 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Search Results */}
             {searchTouched && search.length > 0 && (
               <View style={styles.searchResultsSection}>
                 <View style={styles.searchResultsHeader}>
-                  <CustomText style={styles.searchResultsTitle}>Top Matches</CustomText>
+                  <CustomText style={styles.searchResultsTitle}>
+                    {searching ? 'Searching...' : searchResults.length > 0 ? 'Top Results' : 'No Results'}
+                  </CustomText>
                   {searchResults.length > 0 && (
-                    <TouchableOpacity onPress={() => {
-                      router.push({ pathname: '/recipes', params: { search } });
-                      closeDropdown();
-                    }}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        router.push({ pathname: '/recipes', params: { search } });
+                        closeDropdown();
+                      }}
+                      activeOpacity={0.7}
+                    >
                       <CustomText style={styles.seeAllLink}>See all</CustomText>
                     </TouchableOpacity>
                   )}
@@ -328,9 +547,14 @@ export default function HomeScreen() {
                   <View style={styles.searchLoadingContainer}>
                     <Animated.Image
                       source={require('../assets/images/fork-knife.png')}
-                      style={{ width: 32, height: 32, tintColor: '#4CAF50', transform: [{ scale: pulseAnim }] }}
+                      style={{ 
+                        width: 36, 
+                        height: 36, 
+                        tintColor: '#256D85', 
+                        transform: [{ scale: pulseAnim }] 
+                      }}
                     />
-                    <CustomText style={styles.searchLoadingText}>Searching...</CustomText>
+                    <CustomText style={styles.searchLoadingText}>Finding recipes...</CustomText>
                   </View>
                 ) : searchResults.length > 0 ? (
                   <View style={styles.searchResultsList}>
@@ -346,68 +570,136 @@ export default function HomeScreen() {
                       />
                     ))}
                   </View>
-                ) : null}
+                ) : (
+                  <View style={styles.emptySearchState}>
+                    <Ionicons name="search-outline" size={48} color="#D1D5DB" />
+                    <CustomText style={styles.emptySearchText}>
+                      No recipes found for "{search}"
+                    </CustomText>
+                    <CustomText style={styles.emptySearchSubtext}>
+                      Try a different search term
+                    </CustomText>
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Main Action Grid */}
+            {/* Main Content - New Layout */}
             {(!searchTouched || search.length === 0) && (
-              <View style={styles.gridContainer}>
-              <TouchableOpacity style={[styles.gridCard, styles.gridCardGreen]} onPress={() => router.push('/chat')} activeOpacity={0.92}>
-                <Ionicons name="sparkles" size={32} color="#fff" style={styles.gridIcon} />
-                <CustomText style={styles.gridCardTitle}>Ask AI Chef</CustomText>
-                <CustomText style={styles.gridCardDesc}>Get instant meal ideas</CustomText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                ref={recentlyCookedTileRef}
-                style={[styles.gridCard, styles.gridCardPurple]}
-                activeOpacity={0.92}
-                onPress={() => {
-                  if (recentlyCookedTileRef.current) {
-                    recentlyCookedTileRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-                      setRecentlyCookedOrigin({ x, y, width, height });
-                      setShowRecentlyCooked(true);
-                      setShowContextualFavorites(false);
-                      setShowFavorites(false);
-                    });
-                  }
-                }}
-              >
-                <Ionicons name="flame" size={32} color="#fff" style={styles.gridIcon} />
-                <CustomText style={styles.gridCardTitle}>Recently Cooked</CustomText>
-                <CustomText style={styles.gridCardDesc}>{recentlyCooked.length} recipes</CustomText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                ref={favoritesTileRef}
-                style={[styles.gridCard, styles.gridCardYellow]}
-                activeOpacity={0.92}
-                onPress={() => {
-                  if (favoritesTileRef.current) {
-                    favoritesTileRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-                      setFavoritesOrigin({ x, y, width, height });
-                      setShowContextualFavorites(true);
-                      setShowFavorites(false);
-                      setShowRecentlyCooked(false);
-                    });
-                  }
-                }}
-              >
-                <Ionicons name="heart" size={32} color="#fff" style={styles.gridIcon} />
-                <CustomText style={styles.gridCardTitle}>Favorites</CustomText>
-                <CustomText style={styles.gridCardDesc}>{favorites.length} saved</CustomText>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.gridCard, styles.gridCardBlue]} activeOpacity={0.92}>
-                <Ionicons name="bulb" size={32} color="#fff" style={styles.gridIcon} />
-                <CustomText style={styles.gridCardTitle}>Surprise Me</CustomText>
-                <CustomText style={styles.gridCardDesc}>Random recipe idea</CustomText>
-              </TouchableOpacity>
-            </View>
+              <>
+                {/* AI Chef Assistant Card */}
+                <View style={styles.sectionContainer}>
+                  <AIChefCard onPress={() => router.push('/chat')} />
+                </View>
+
+                {/* Recently Cooked - Horizontal Scroll */}
+                {recentlyCooked.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <CustomText style={styles.sectionTitle}>Recently Cooked</CustomText>
+                      <TouchableOpacity
+                        ref={recentlyCookedTileRef}
+                        onPress={() => {
+                          if (recentlyCookedTileRef.current) {
+                            recentlyCookedTileRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+                              setRecentlyCookedOrigin({ x, y, width, height });
+                              setShowRecentlyCooked(true);
+                              setShowContextualFavorites(false);
+                              setShowFavorites(false);
+                            });
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <CustomText style={styles.seeAllLink}>See All</CustomText>
+                      </TouchableOpacity>
+                    </View>
+                    <FlatList
+                      data={recentlyCooked.slice(0, 10)}
+                      renderItem={({ item, index }) => (
+                        <HorizontalRecipeCard
+                          item={item}
+                          index={index}
+                          onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
+                        />
+                      )}
+                      keyExtractor={(item, index) => item.id || index.toString()}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.horizontalListContent}
+                      ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
+                    />
+                  </View>
+                )}
+
+                {/* Your Favorites - Vertical List */}
+                {favorites.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <CustomText style={styles.sectionTitle}>Your Favorites</CustomText>
+                      <TouchableOpacity
+                        ref={favoritesTileRef}
+                        onPress={() => {
+                          if (favoritesTileRef.current) {
+                            favoritesTileRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+                              setFavoritesOrigin({ x, y, width, height });
+                              setShowContextualFavorites(true);
+                              setShowFavorites(false);
+                              setShowRecentlyCooked(false);
+                            });
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <CustomText style={styles.seeAllLink}>See All</CustomText>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.verticalFavoritesList}>
+                      {favorites.slice(0, 3).map((item, index) => (
+                        <VerticalFavoriteCard
+                          key={item.id || index}
+                          item={item}
+                          index={index}
+                          onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Quick Actions */}
+                <View style={styles.sectionContainer}>
+                  <CustomText style={styles.sectionTitle}>Quick Actions</CustomText>
+                  <View style={styles.quickActionsContainer}>
+                    <TouchableOpacity
+                      style={styles.quickActionCard}
+                      onPress={() => router.push('/add-recipe-photo')}
+                      activeOpacity={0.9}
+                    >
+                      <View style={styles.quickActionIconCircle}>
+                        <Ionicons name="camera" size={24} color="#256D85" />
+                      </View>
+                      <CustomText style={styles.quickActionText}>Scan Recipe</CustomText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickActionCard}
+                      onPress={() => router.push('/recipes')}
+                      activeOpacity={0.9}
+                    >
+                      <View style={styles.quickActionIconCircle}>
+                        <Ionicons name="share-social" size={24} color="#256D85" />
+                      </View>
+                      <CustomText style={styles.quickActionText}>Share Recipe</CustomText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
             )}
           </ScrollView>
         </View>
 
-        {/* ContextualSheet for Recently Cooked */}
-        {(showRecentlyCooked && recentlyCookedOrigin && recentlyCookedOrigin.width > 0 && recentlyCookedOrigin.height > 0) && (
+        {/* Modals */}
+        {(showRecentlyCooked && recentlyCookedOrigin && recentlyCookedOrigin.width > 0) && (
           <ContextualSheet
             visible={showRecentlyCooked}
             onClose={() => setShowRecentlyCooked(false)}
@@ -420,8 +712,7 @@ export default function HomeScreen() {
             />
           </ContextualSheet>
         )}
-        {/* Only render ContextualSheet for Favorites if origin is valid */}
-        {(showContextualFavorites && favoritesOrigin && favoritesOrigin.width > 0 && favoritesOrigin.height > 0) && (
+        {(showContextualFavorites && favoritesOrigin && favoritesOrigin.width > 0) && (
           <ContextualSheet
             visible={showContextualFavorites}
             onClose={() => setShowContextualFavorites(false)}
@@ -434,217 +725,269 @@ export default function HomeScreen() {
             />
           </ContextualSheet>
         )}
-      </SafeAreaView>
+      </View>
     </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   headerBg: {
     backgroundColor: '#F3F0FF',
-    paddingTop: Platform.OS === 'ios' ? 48 : 32,
     paddingBottom: 24,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#256D85',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   logoText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#222',
-    letterSpacing: 0.5,
+    fontSize: 24,
+  },
+  avatarContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    marginLeft: 12,
-    backgroundColor: '#D1E7DD',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#256D85',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  greetingContainer: {
+    marginTop: 4,
+  },
+  greetingTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   greetingText: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#222',
-    marginTop: 2,
-    marginLeft: 2,
+    color: '#1F2937',
+    marginBottom: 6,
     letterSpacing: -0.5,
   },
   subGreeting: {
     fontSize: 16,
     color: '#6B7280',
     fontWeight: '500',
-    marginTop: 2,
-    marginBottom: 8,
+    lineHeight: 22,
+  },
+  contentWrapper: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
   },
   searchBarWrapper: {
     alignItems: 'center',
-    marginTop: -28,
-    marginBottom: 18,
+    marginTop: -20,
+    marginBottom: 24,
+    paddingHorizontal: 24,
     zIndex: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: '#E5E7EB',
-    paddingHorizontal: 18,
-    height: 54,
-    width: '92%',
-    marginTop: 8,
+    paddingHorizontal: 20,
+    height: 56,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  searchBarFocused: {
+    borderColor: '#256D85',
+    shadowColor: '#256D85',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
   },
   searchInput: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '500',
-    color: '#222',
+    color: '#1F2937',
     fontFamily: 'System',
     paddingVertical: 0,
   },
-  resultsDropdown: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    marginTop: 8,
-    width: '92%',
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingBottom: 0,
-    shadowColor: 'transparent',
-    elevation: 0,
+  searchClear: {
+    padding: 4,
+    marginLeft: 8,
   },
-  resultItem: {
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F6F9',
-    backgroundColor: 'transparent',
+  scrollView: {
+    flex: 1,
   },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  resultText: {
-    fontSize: 17,
-    color: '#222',
-    fontWeight: '500',
-    marginLeft: 2,
-  },
-  loadingBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
+  scrollContent: {
+    paddingBottom: 32,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    marginBottom: 18,
+    paddingHorizontal: 24,
     marginTop: 8,
   },
   gridCard: {
-    width: '47%',
-    aspectRatio: 1,
-    borderRadius: 28,
+    width: (SCREEN_WIDTH - 64) / 2,
+    height: 180,
+    borderRadius: 24,
     marginBottom: 16,
-    alignItems: 'flex-start',
-    justifyContent: 'flex-end',
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  gridCardIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  gridCardContent: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   gridCardGreen: {
-    backgroundColor: '#B6E2D3',
+    backgroundColor: '#6DA98C',
   },
   gridCardPurple: {
-    backgroundColor: '#D6D6F7',
+    backgroundColor: '#9B87F5',
   },
   gridCardYellow: {
-    backgroundColor: '#FFF3C4',
+    backgroundColor: '#F4C430',
   },
   gridCardBlue: {
-    backgroundColor: '#C7E6FB',
-  },
-  gridIcon: {
-    marginBottom: 12,
+    backgroundColor: '#4A90E2',
   },
   gridCardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#222',
-    marginBottom: 4,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   gridCardDesc: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
-    marginBottom: 2,
+    lineHeight: 18,
   },
   searchResultsSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     marginTop: 8,
-    marginBottom: 24,
   },
   searchResultsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   searchResultsTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1F2937',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   seeAllLink: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#256D85',
   },
   searchLoadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    paddingVertical: 60,
   },
   searchLoadingText: {
-    color: '#4CAF50',
-    marginTop: 12,
+    color: '#256D85',
+    marginTop: 16,
     fontWeight: '600',
-    fontSize: 15,
+    fontSize: 16,
   },
   searchResultsList: {
-    // gap handled by marginBottom in recipeCard
+    gap: 12,
   },
   recipeCard: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   recipeCardImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
+    width: 88,
+    height: 88,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
-    marginRight: 12,
+    marginRight: 16,
+  },
+  recipeCardImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recipeCardContent: {
     flex: 1,
@@ -654,20 +997,23 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#1F2937',
-    lineHeight: 22,
+    lineHeight: 24,
+    marginBottom: 8,
   },
   highlightedText: {
-    color: '#4CAF50',
+    color: '#256D85',
     fontWeight: '700',
   },
   recipeCardMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   recipeCardMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 16,
+    marginTop: 4,
   },
   recipeCardMetaText: {
     fontSize: 13,
@@ -678,9 +1024,300 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 12,
+  },
+  emptySearchState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptySearchText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySearchSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  // Sections
+  sectionContainer: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: -0.3,
+  },
+  // Horizontal Recipe Cards
+  horizontalListContent: {
+    paddingHorizontal: 24,
+  },
+  horizontalRecipeCard: {
+    width: CARD_WIDTH,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  horizontalRecipeImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F3F4F6',
+  },
+  horizontalRecipeImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  horizontalRecipeContent: {
+    padding: 16,
+  },
+  horizontalRecipeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  horizontalRecipeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  horizontalRecipeMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+    marginTop: 4,
+  },
+  horizontalRecipeMetaText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  // AI Chef Card
+  aiChefCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  aiChefIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  aiChefContent: {
+    flex: 1,
+  },
+  aiChefTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  aiChefDesc: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  // Horizontal Recipe Card (New - with colored square icon)
+  horizontalRecipeCardNew: {
+    width: CARD_WIDTH,
+  },
+  horizontalRecipeIconSquare: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    position: 'relative',
+  },
+  favoriteBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  horizontalRecipeContentNew: {
+    paddingHorizontal: 4,
+  },
+  horizontalRecipeTitleNew: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  horizontalRecipeMetaNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  horizontalRecipeMetaItemNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  horizontalRecipeMetaTextNew: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 3,
+  },
+  // Vertical Favorite Card
+  verticalFavoriteCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  verticalFavoriteIconSquare: {
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  verticalFavoriteContent: {
+    flex: 1,
+  },
+  verticalFavoriteTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  verticalFavoriteMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  verticalFavoriteMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  verticalFavoriteMetaText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  friendsCooked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  friendAvatars: {
+    flexDirection: 'row',
+    marginRight: 8,
+  },
+  friendAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  friendsCookedText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  verticalFavoriteHeart: {
+    padding: 8,
+  },
+  verticalFavoritesList: {
+    paddingBottom: 8,
+  },
+  // Quick Actions
+  quickActionsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  quickActionCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  quickActionIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  quickActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 }); 
