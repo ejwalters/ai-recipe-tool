@@ -25,11 +25,11 @@ const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; sea
   const friendsCookedCount = item.friends_cooked_count || 0;
   const title = item.title || 'Untitled Recipe';
   
-  // Render highlighted title with single line constraint
+  // Render highlighted title - allow 2 lines for better readability
   const renderHighlightedTitle = (text: string, searchTerm: string) => {
     if (!searchTerm) {
       return (
-        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
+        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={2} ellipsizeMode="tail">
           {text}
         </CustomText>
       );
@@ -39,7 +39,7 @@ const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; sea
     const parts = text.split(regex);
     
     return (
-      <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
+      <CustomText style={styles.verticalFavoriteTitle} numberOfLines={2} ellipsizeMode="tail">
         {parts.map((part, i) => {
           const isMatch = part.toLowerCase() === searchTerm.toLowerCase();
           return (
@@ -194,7 +194,7 @@ const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress
         )}
       </View>
       <View style={styles.verticalFavoriteContent}>
-        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
+        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={2} ellipsizeMode="tail">
           {item.title || 'Untitled Recipe'}
         </CustomText>
         <View style={styles.verticalFavoriteMeta}>
@@ -964,7 +964,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   searchResultsSection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
     marginTop: 8,
   },
   searchResultsHeader: {
@@ -972,6 +972,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    paddingHorizontal: 24,
   },
   searchResultsTitle: {
     fontSize: 24,
@@ -997,6 +998,7 @@ const styles = StyleSheet.create({
   },
   searchResultsList: {
     gap: 12,
+    paddingHorizontal: 0,
   },
   aiRecipeCard: {
     flexDirection: 'row',
@@ -1004,6 +1006,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 12,
+    marginHorizontal: 24,
     shadowColor: '#256D85',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1332,6 +1335,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 8,
+    lineHeight: 22,
+    maxWidth: '100%',
   },
   verticalFavoriteMeta: {
     flexDirection: 'row',
@@ -1384,6 +1389,7 @@ const styles = StyleSheet.create({
   },
   verticalFavoritesList: {
     paddingBottom: 8,
+    paddingHorizontal: 0,
   },
   // Quick Actions
   quickActionsContainer: {
