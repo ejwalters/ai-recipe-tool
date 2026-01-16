@@ -94,7 +94,12 @@ router.get('/list', async (req, res) => {
     }
     
     if (q) {
-        query = query.ilike('title', `%${q}%`);
+        // Search both title and ingredients
+        // Since ingredients is stored as a JSON array, we need to search it as text
+        // PostgREST's .or() allows searching multiple columns
+        // Format: column1.operator.value,column2.operator.value
+        const searchPattern = `%${q}%`;
+        query = query.or(`title.ilike.${searchPattern},ingredients::text.ilike.${searchPattern}`);
     }
     if (req.query.tags) {
         const tagsArray = req.query.tags.split(',');

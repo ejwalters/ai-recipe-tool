@@ -570,29 +570,46 @@ export default function HomeScreen() {
                     />
                     <CustomText style={styles.searchLoadingText}>Finding recipes...</CustomText>
                   </View>
-                ) : searchResults.length > 0 ? (
-                  <View style={styles.searchResultsList}>
-                    {searchResults.slice(0, 4).map((item, idx) => (
-                      <RecipeSearchCard
-                        key={item.id || item.title || idx}
-                        item={item}
-                        search={search}
-                        onPress={() => {
-                          router.push({ pathname: '/recipe-detail', params: { id: item.id } });
-                          closeDropdown();
-                        }}
-                      />
-                    ))}
-                  </View>
                 ) : (
-                  <View style={styles.emptySearchState}>
-                    <Ionicons name="search-outline" size={48} color="#D1D5DB" />
-                    <CustomText style={styles.emptySearchText}>
-                      No recipes found for "{search}"
-                    </CustomText>
-                    <CustomText style={styles.emptySearchSubtext}>
-                      Try a different search term
-                    </CustomText>
+                  <View style={styles.searchResultsList}>
+                    {/* AI Recipe Creation Card - Always shown when searching */}
+                    <TouchableOpacity
+                      style={styles.aiRecipeCard}
+                      onPress={() => {
+                        router.push({ 
+                          pathname: '/chat', 
+                          params: { initialMessage: encodeURIComponent(`Create a recipe with ${search}`) }
+                        });
+                        closeDropdown();
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <View style={styles.aiRecipeIconContainer}>
+                        <Ionicons name="sparkles" size={28} color="#256D85" />
+                      </View>
+                      <View style={styles.aiRecipeContent}>
+                        <CustomText style={styles.aiRecipeTitle}>Create AI Recipe</CustomText>
+                        <CustomText style={styles.aiRecipeSubtitle}>Generate a recipe with "{search}"</CustomText>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    {/* Recipe Results */}
+                    {searchResults.length > 0 && (
+                      <>
+                        {searchResults.slice(0, 4).map((item, idx) => (
+                          <RecipeSearchCard
+                            key={item.id || item.title || idx}
+                            item={item}
+                            search={search}
+                            onPress={() => {
+                              router.push({ pathname: '/recipe-detail', params: { id: item.id } });
+                              closeDropdown();
+                            }}
+                          />
+                        ))}
+                      </>
+                    )}
                   </View>
                 )}
               </View>
@@ -978,6 +995,52 @@ const styles = StyleSheet.create({
   },
   searchResultsList: {
     gap: 12,
+  },
+  aiRecipeCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#256D85',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#D1FAE5',
+  },
+  aiRecipeIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+    shadowColor: '#256D85',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  aiRecipeContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  aiRecipeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  aiRecipeSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+    lineHeight: 20,
   },
   recipeCard: {
     flexDirection: 'row',

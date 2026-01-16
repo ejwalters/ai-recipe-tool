@@ -185,7 +185,7 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
 
 export default function ChatScreen() {
     const router = useRouter();
-    const { chat_id } = useLocalSearchParams();
+    const { chat_id, initialMessage } = useLocalSearchParams();
     const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -193,7 +193,7 @@ export default function ChatScreen() {
     const [userProfile, setUserProfile] = useState<{ avatar_url?: string } | null>(null);
     const [currentChatId, setCurrentChatId] = useState<string | null>(chat_id ? String(chat_id) : null);
     const [sending, setSending] = useState(false);
-    const [message, setMessage] = useState('');
+    const [message, setMessage] = useState(initialMessage ? decodeURIComponent(String(initialMessage)) : '');
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
     const inputBottomOffset = useRef(new Animated.Value(0)).current;
