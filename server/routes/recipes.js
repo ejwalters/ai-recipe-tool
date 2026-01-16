@@ -159,8 +159,77 @@ router.get('/favorites', async (req, res) => {
     console.log('Recipes query result:', { recipes, recipesError });
     if (recipesError) return res.status(500).json({ error: recipesError.message });
 
-    console.log('Returning recipes:', recipes);
-    res.json(recipes);
+    // Get user's following list (friends)
+    const { data: following, error: followingError } = await supabase
+        .from('social_follows')
+        .select('followee_id')
+        .eq('follower_id', user_id);
+
+    // If no following or error, return recipes without friends data
+    if (followingError || !following || following.length === 0) {
+        console.log('No following data, returning recipes without friends');
+        return res.json(recipes.map(r => ({ 
+            ...r, 
+            friends_cooked_count: 0, 
+            friends_cooked: [] 
+        })));
+    }
+
+    const followingIds = following.map(f => f.followee_id);
+    
+    // Get friends who cooked each recipe (from recently_cooked table)
+    const { data: cookedData, error: cookedError } = await supabase
+        .from('recently_cooked')
+        .select('recipe_id, user_id')
+        .in('recipe_id', recipeIds)
+        .in('user_id', followingIds);
+
+    // Group by recipe_id and count unique users
+    const friendsCookedMap = new Map();
+    if (cookedData && !cookedError) {
+        cookedData.forEach(record => {
+            if (!friendsCookedMap.has(record.recipe_id)) {
+                friendsCookedMap.set(record.recipe_id, new Set());
+            }
+            friendsCookedMap.get(record.recipe_id).add(record.user_id);
+        });
+    }
+
+    // Get avatars for friends who cooked
+    const friendIds = [...new Set((cookedData || []).map(c => c.user_id))];
+    let profileMap = new Map();
+    
+    if (friendIds.length > 0) {
+        const { data: friendProfiles } = await supabase
+            .from('profiles')
+            .select('id, avatar_url, display_name')
+            .in('id', friendIds);
+        
+        if (friendProfiles) {
+            profileMap = new Map(friendProfiles.map(p => [p.id, p]));
+        }
+    }
+
+    // Enhance recipes with friends data
+    const recipesWithFriends = recipes.map(recipe => {
+        const cookedUserIds = friendsCookedMap.get(recipe.id) || new Set();
+        const friendsWhoCooked = Array.from(cookedUserIds)
+            .map(userId => {
+                const profile = profileMap.get(userId);
+                return profile ? { id: profile.id, avatar_url: profile.avatar_url, display_name: profile.display_name } : null;
+            })
+            .filter(Boolean)
+            .slice(0, 3); // Only first 3 for avatars
+
+        return {
+            ...recipe,
+            friends_cooked_count: cookedUserIds.size,
+            friends_cooked: friendsWhoCooked,
+        };
+    });
+
+    console.log('Returning recipes with friends data:', recipesWithFriends.length);
+    res.json(recipesWithFriends);
 });
 
 // GET /recipes/recently-cooked?user_id=...

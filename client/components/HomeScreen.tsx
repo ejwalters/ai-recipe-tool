@@ -146,9 +146,9 @@ const HorizontalRecipeCard = ({ item, onPress, index = 0 }: { item: any; onPress
       >
         <View style={[styles.horizontalRecipeIconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
           {iconConfig.library === 'MaterialCommunityIcons' ? (
-            <MaterialCommunityIcons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
+            <MaterialCommunityIcons name={iconConfig.name as any} size={40} color={iconConfig.iconColor} />
           ) : (
-            <Ionicons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
+            <Ionicons name={iconConfig.name as any} size={40} color={iconConfig.iconColor} />
           )}
           {isFavorited && (
             <View style={styles.favoriteBadge}>
@@ -177,8 +177,10 @@ const HorizontalRecipeCard = ({ item, onPress, index = 0 }: { item: any; onPress
 // Vertical Favorite Recipe Card (for Your Favorites section)
 const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress: () => void; index?: number }) => {
   const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
-  const difficulty = getDifficultyLevel(item);
-  const isFavorited = item.is_favorited !== false; // Default to true for favorites section
+  
+  // Real friends cooked data (from backend)
+  const friendsCooked = item.friends_cooked || [];
+  const friendsCookedCount = item.friends_cooked_count || 0;
   
   return (
     <TouchableOpacity
@@ -204,26 +206,36 @@ const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress
               <CustomText style={styles.verticalFavoriteMetaText}>{item.time} min</CustomText>
             </View>
           )}
-          <View style={styles.verticalFavoriteMetaItem}>
-            <Ionicons name="flame-outline" size={14} color={difficulty.color} />
-            <CustomText style={[styles.verticalFavoriteMetaText, { color: difficulty.color }]}>
-              {difficulty.text}
+        </View>
+        {/* Real friends cooked data */}
+        {friendsCookedCount > 0 && (
+          <View style={styles.friendsCooked}>
+            <View style={styles.friendAvatars}>
+              {friendsCooked.slice(0, 3).map((friend: any, idx: number) => (
+                friend.avatar_url ? (
+                  <Image
+                    key={friend.id || idx}
+                    source={{ uri: friend.avatar_url }}
+                    style={[styles.friendAvatar, styles.friendAvatarImage, { marginLeft: idx > 0 ? -8 : 0 }]}
+                  />
+                ) : (
+                  <View
+                    key={friend.id || idx}
+                    style={[styles.friendAvatar, styles.friendAvatarPlaceholder, { marginLeft: idx > 0 ? -8 : 0 }]}
+                  >
+                    <CustomText style={styles.friendAvatarInitial}>
+                      {friend.display_name?.charAt(0).toUpperCase() || '?'}
+                    </CustomText>
+                  </View>
+                )
+              ))}
+            </View>
+            <CustomText style={styles.friendsCookedText}>
+              +{friendsCookedCount} {friendsCookedCount === 1 ? 'friend cooked' : 'friends cooked'}
             </CustomText>
           </View>
-        </View>
-        {/* Social proof - friends cooked (placeholder for now) */}
-        <View style={styles.friendsCooked}>
-          <View style={styles.friendAvatars}>
-            <View style={[styles.friendAvatar, { backgroundColor: '#E5E7EB' }]} />
-            <View style={[styles.friendAvatar, { backgroundColor: '#D1D5DB', marginLeft: -8 }]} />
-            <View style={[styles.friendAvatar, { backgroundColor: '#9CA3AF', marginLeft: -8 }]} />
-          </View>
-          <CustomText style={styles.friendsCookedText}>+12 friends cooked</CustomText>
-        </View>
+        )}
       </View>
-      <TouchableOpacity style={styles.verticalFavoriteHeart} activeOpacity={0.7}>
-        <Ionicons name="heart" size={22} color="#EF4444" />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 };
@@ -1275,13 +1287,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
+  friendAvatarImage: {
+    backgroundColor: '#F3F4F6',
+  },
+  friendAvatarPlaceholder: {
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  friendAvatarInitial: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
   friendsCookedText: {
     fontSize: 12,
     color: '#9CA3AF',
     fontWeight: '500',
-  },
-  verticalFavoriteHeart: {
-    padding: 8,
   },
   verticalFavoritesList: {
     paddingBottom: 8,
