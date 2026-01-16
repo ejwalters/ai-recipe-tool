@@ -165,9 +165,11 @@ router.get('/list', async (req, res) => {
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     
-    // If user_id is provided, check which recipes are favorited
+    // If user_id is provided, check which recipes are favorited and get friends cooked data
     if (user_id && data.length > 0) {
         const recipeIds = data.map(r => r.id);
+        
+        // Get favorite status
         const { data: favs, error: favsError } = await supabase
             .from('favorites')
             .select('recipe_id')
@@ -180,6 +182,72 @@ router.get('/list', async (req, res) => {
                 recipe.is_favorited = favoritedIds.has(recipe.id);
             });
         }
+        
+        // Get friends cooked data (similar to favorites endpoint)
+        const { data: following } = await supabase
+            .from('social_follows')
+            .select('followee_id')
+            .eq('follower_id', user_id);
+        
+        if (following && following.length > 0) {
+            const followingIds = following.map(f => f.followee_id);
+            
+            // Get friends who cooked these recipes
+            const { data: cookedData } = await supabase
+                .from('recently_cooked')
+                .select('recipe_id, user_id')
+                .in('recipe_id', recipeIds)
+                .in('user_id', followingIds);
+            
+            // Group by recipe_id
+            const friendsCookedMap = new Map();
+            if (cookedData) {
+                cookedData.forEach(record => {
+                    if (!friendsCookedMap.has(record.recipe_id)) {
+                        friendsCookedMap.set(record.recipe_id, new Set());
+                    }
+                    friendsCookedMap.get(record.recipe_id).add(record.user_id);
+                });
+            }
+            
+            // Get friend profiles
+            const friendIds = [...new Set((cookedData || []).map(c => c.user_id))];
+            let profileMap = new Map();
+            if (friendIds.length > 0) {
+                const { data: friendProfiles } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url, display_name')
+                    .in('id', friendIds);
+                
+                if (friendProfiles) {
+                    profileMap = new Map(friendProfiles.map(p => [p.id, p]));
+                }
+            }
+            
+            // Add friends data to recipes
+            data.forEach(recipe => {
+                const cookedUserIds = friendsCookedMap.get(recipe.id) || new Set();
+                const friendsWhoCooked = Array.from(cookedUserIds)
+                    .map(userId => profileMap.get(userId))
+                    .filter(Boolean)
+                    .slice(0, 3);
+                
+                recipe.friends_cooked_count = cookedUserIds.size;
+                recipe.friends_cooked = friendsWhoCooked;
+            });
+        } else {
+            // No following, set defaults
+            data.forEach(recipe => {
+                recipe.friends_cooked_count = 0;
+                recipe.friends_cooked = [];
+            });
+        }
+    } else {
+        // No user_id, set defaults
+        data.forEach(recipe => {
+            recipe.friends_cooked_count = 0;
+            recipe.friends_cooked = [];
+        });
     }
     
     res.json(data);

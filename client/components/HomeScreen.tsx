@@ -17,99 +17,97 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.38; // Compact tiles for recently cooked
 
 // Recipe Card Component for Search Results - Enhanced
-const RecipeSearchCard = ({ item, search, onPress }: { item: any; search: string; onPress: () => void }) => {
-  const [imageError, setImageError] = useState(false);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; search: string; onPress: () => void; index?: number }) => {
+  const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
+  
+  // Real friends cooked data (from backend)
+  const friendsCooked = item.friends_cooked || [];
+  const friendsCookedCount = item.friends_cooked_count || 0;
   const title = item.title || 'Untitled Recipe';
   
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.98,
-      useNativeDriver: true,
-      friction: 3,
-    }).start();
-  };
-  
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      friction: 3,
-    }).start();
-  };
-  
+  // Render highlighted title with single line constraint
   const renderHighlightedTitle = (text: string, searchTerm: string) => {
     if (!searchTerm) {
-      return <CustomText style={styles.recipeCardTitle} numberOfLines={1}>{text}</CustomText>;
+      return (
+        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
+          {text}
+        </CustomText>
+      );
     }
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    // For highlighted search results, use nested Text components for highlighting
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
+    
     return (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
         {parts.map((part, i) => {
           const isMatch = part.toLowerCase() === searchTerm.toLowerCase();
           return (
             <CustomText
               key={i}
-              style={isMatch ? [styles.recipeCardTitle, styles.highlightedText] : styles.recipeCardTitle}
+              style={isMatch ? { color: '#256D85', fontWeight: '700' } : {}}
             >
               {part}
             </CustomText>
           );
         })}
-      </View>
+      </CustomText>
     );
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.recipeCard}
-        activeOpacity={0.95}
-      >
-        {item.image_url && !imageError ? (
-          <Image
-            source={{ uri: item.image_url }}
-            style={styles.recipeCardImage}
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-          />
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.verticalFavoriteCard}
+      activeOpacity={0.9}
+    >
+      <View style={[styles.verticalFavoriteIconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
+        {iconConfig.library === 'MaterialCommunityIcons' ? (
+          <MaterialCommunityIcons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
         ) : (
-          <View style={[styles.recipeCardImage, styles.recipeCardImagePlaceholder]}>
-            <Ionicons name="restaurant-outline" size={28} color="#9CA3AF" />
+          <Ionicons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
+        )}
+      </View>
+      <View style={styles.verticalFavoriteContent}>
+        {renderHighlightedTitle(title, search)}
+        <View style={styles.verticalFavoriteMeta}>
+          {item.time && (
+            <View style={styles.verticalFavoriteMetaItem}>
+              <Ionicons name="time-outline" size={14} color="#6B7280" />
+              <CustomText style={styles.verticalFavoriteMetaText}>{item.time} min</CustomText>
+            </View>
+          )}
+        </View>
+        {/* Real friends cooked data */}
+        {friendsCookedCount > 0 && (
+          <View style={styles.friendsCooked}>
+            <View style={styles.friendAvatars}>
+              {friendsCooked.slice(0, 3).map((friend: any, idx: number) => (
+                friend.avatar_url ? (
+                  <Image
+                    key={friend.id || idx}
+                    source={{ uri: friend.avatar_url }}
+                    style={[styles.friendAvatar, styles.friendAvatarImage, { marginLeft: idx > 0 ? -8 : 0 }]}
+                  />
+                ) : (
+                  <View
+                    key={friend.id || idx}
+                    style={[styles.friendAvatar, styles.friendAvatarPlaceholder, { marginLeft: idx > 0 ? -8 : 0 }]}
+                  >
+                    <CustomText style={styles.friendAvatarInitial}>
+                      {friend.display_name?.charAt(0).toUpperCase() || '?'}
+                    </CustomText>
+                  </View>
+                )
+              ))}
+            </View>
+            <CustomText style={styles.friendsCookedText}>
+              +{friendsCookedCount} {friendsCookedCount === 1 ? 'friend cooked' : 'friends cooked'}
+            </CustomText>
           </View>
         )}
-        <View style={styles.recipeCardContent}>
-          <View style={{ marginBottom: 10 }}>
-            {renderHighlightedTitle(title, search)}
-          </View>
-          <View style={styles.recipeCardMeta}>
-            {item.time && (
-              <View style={styles.recipeCardMetaItem}>
-                <Ionicons name="time-outline" size={13} color="#6B7280" style={{ marginRight: 4 }} />
-                <CustomText style={styles.recipeCardMetaText}>
-                  {item.time} min
-                </CustomText>
-              </View>
-            )}
-            {item.calories && (
-              <View style={styles.recipeCardMetaItem}>
-                <Ionicons name="flame-outline" size={13} color="#6B7280" style={{ marginRight: 4 }} />
-                <CustomText style={styles.recipeCardMetaText}>
-                  {item.calories} cal
-                </CustomText>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={styles.recipeCardArrow}>
-          <Ionicons name="chevron-forward" size={18} color="#256D85" />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
+      </View>
+    </TouchableOpacity>
   );
 };
 
@@ -196,7 +194,7 @@ const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress
         )}
       </View>
       <View style={styles.verticalFavoriteContent}>
-        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1}>
+        <CustomText style={styles.verticalFavoriteTitle} numberOfLines={1} ellipsizeMode="tail">
           {item.title || 'Untitled Recipe'}
         </CustomText>
         <View style={styles.verticalFavoriteMeta}>
@@ -362,7 +360,10 @@ export default function HomeScreen() {
     }
     setSearching(true);
     const timeout = setTimeout(() => {
-      fetch(`https://familycooksclean.onrender.com/recipes/list?q=${encodeURIComponent(search)}`)
+      const url = userId 
+        ? `https://familycooksclean.onrender.com/recipes/list?q=${encodeURIComponent(search)}&user_id=${userId}`
+        : `https://familycooksclean.onrender.com/recipes/list?q=${encodeURIComponent(search)}`;
+      fetch(url)
         .then(res => res.json())
         .then(data => {
           setSearchResults(Array.isArray(data) ? data : []);
@@ -371,7 +372,7 @@ export default function HomeScreen() {
         .catch(() => { setSearchResults([]); setSearching(false); });
     }, 400);
     return () => clearTimeout(timeout);
-  }, [search]);
+  }, [search, userId]);
 
   // Animate search bar focus
   useEffect(() => {
@@ -596,19 +597,20 @@ export default function HomeScreen() {
 
                     {/* Recipe Results */}
                     {searchResults.length > 0 && (
-                      <>
+                      <View style={styles.verticalFavoritesList}>
                         {searchResults.slice(0, 4).map((item, idx) => (
                           <RecipeSearchCard
                             key={item.id || item.title || idx}
                             item={item}
                             search={search}
+                            index={idx}
                             onPress={() => {
                               router.push({ pathname: '/recipe-detail', params: { id: item.id } });
                               closeDropdown();
                             }}
                           />
                         ))}
-                      </>
+                      </View>
                     )}
                   </View>
                 )}
