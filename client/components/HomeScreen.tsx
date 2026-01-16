@@ -9,21 +9,25 @@ import { useFocusEffect } from '@react-navigation/native';
 import { profileService } from '../lib/profileService';
 import RecentlyCookedSheet from './experimental/RecentlyCookedSheet';
 import Favorites from './experimental/Favorites';
+import FriendsCookedSheet from './experimental/FriendsCookedSheet';
+import FriendsPopover from './experimental/FriendsPopover';
 import ContextualSheet, { OriginRect } from './experimental/ContextualSheet';
 import { getRecipeIconConfig, getDifficultyLevel } from '../utils/recipeIcons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.38; // Compact tiles for recently cooked
 
 // Recipe Card Component for Search Results - Enhanced
-const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; search: string; onPress: () => void; index?: number }) => {
+const RecipeSearchCard = ({ item, search, onPress, index = 0, onFriendsPress }: { item: any; search: string; onPress: () => void; index?: number; onFriendsPress?: (friends: any[], recipeTitle: string, ref: any) => void }) => {
   const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
   
   // Real friends cooked data (from backend)
   const friendsCooked = item.friends_cooked || [];
   const friendsCookedCount = item.friends_cooked_count || 0;
   const title = item.title || 'Untitled Recipe';
+  const [friendsSectionPressed, setFriendsSectionPressed] = React.useState(false);
+  const friendsSectionRef = React.useRef<View>(null);
   
   // Render highlighted title - allow 2 lines for better readability
   const renderHighlightedTitle = (text: string, searchTerm: string) => {
@@ -57,7 +61,12 @@ const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; sea
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={() => {
+        if (!friendsSectionPressed) {
+          onPress();
+        }
+        setFriendsSectionPressed(false);
+      }}
       style={styles.verticalFavoriteCard}
       activeOpacity={0.9}
     >
@@ -78,9 +87,32 @@ const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; sea
             </View>
           )}
         </View>
-        {/* Real friends cooked data */}
+        {/* Real friends cooked data - Tappable */}
         {friendsCookedCount > 0 && (
-          <View style={styles.friendsCooked}>
+          <View
+            ref={friendsSectionRef}
+            collapsable={false}
+            style={styles.friendsCookedWrapper}
+          >
+            <TouchableOpacity
+              onPressIn={() => setFriendsSectionPressed(true)}
+              onPress={() => {
+                if (onFriendsPress && friendsCookedCount > 0) {
+                  // Measure the wrapper View to get exact position
+                  if (friendsSectionRef.current) {
+                    friendsSectionRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+                      onFriendsPress(friendsCooked, title, { x, y, width, height });
+                    });
+                  } else {
+                    // Fallback: use approximate position
+                    onFriendsPress(friendsCooked, title, { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2, width: 200, height: 40 });
+                  }
+                }
+                setFriendsSectionPressed(false);
+              }}
+              activeOpacity={0.7}
+              style={styles.friendsCooked}
+            >
             <View style={styles.friendAvatars}>
               {friendsCooked.slice(0, 3).map((friend: any, idx: number) => (
                 friend.avatar_url ? (
@@ -104,6 +136,7 @@ const RecipeSearchCard = ({ item, search, onPress, index = 0 }: { item: any; sea
             <CustomText style={styles.friendsCookedText}>
               +{friendsCookedCount} {friendsCookedCount === 1 ? 'friend cooked' : 'friends cooked'}
             </CustomText>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -173,16 +206,24 @@ const HorizontalRecipeCard = ({ item, onPress, index = 0 }: { item: any; onPress
 };
 
 // Vertical Favorite Recipe Card (for Your Favorites section)
-const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress: () => void; index?: number }) => {
+const VerticalFavoriteCard = ({ item, onPress, index = 0, onFriendsPress }: { item: any; onPress: () => void; index?: number; onFriendsPress?: (friends: any[], recipeTitle: string, ref: any) => void }) => {
   const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
   
   // Real friends cooked data (from backend)
   const friendsCooked = item.friends_cooked || [];
   const friendsCookedCount = item.friends_cooked_count || 0;
   
+  const [friendsSectionPressed, setFriendsSectionPressed] = React.useState(false);
+  const friendsSectionRef = React.useRef<View>(null);
+
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={() => {
+        if (!friendsSectionPressed) {
+          onPress();
+        }
+        setFriendsSectionPressed(false);
+      }}
       style={styles.verticalFavoriteCard}
       activeOpacity={0.9}
     >
@@ -205,32 +246,56 @@ const VerticalFavoriteCard = ({ item, onPress, index = 0 }: { item: any; onPress
             </View>
           )}
         </View>
-        {/* Real friends cooked data */}
+        {/* Real friends cooked data - Tappable */}
         {friendsCookedCount > 0 && (
-          <View style={styles.friendsCooked}>
-            <View style={styles.friendAvatars}>
-              {friendsCooked.slice(0, 3).map((friend: any, idx: number) => (
-                friend.avatar_url ? (
-                  <Image
-                    key={friend.id || idx}
-                    source={{ uri: friend.avatar_url }}
-                    style={[styles.friendAvatar, styles.friendAvatarImage, { marginLeft: idx > 0 ? -8 : 0 }]}
-                  />
-                ) : (
-                  <View
-                    key={friend.id || idx}
-                    style={[styles.friendAvatar, styles.friendAvatarPlaceholder, { marginLeft: idx > 0 ? -8 : 0 }]}
-                  >
-                    <CustomText style={styles.friendAvatarInitial}>
-                      {friend.display_name?.charAt(0).toUpperCase() || '?'}
-                    </CustomText>
-                  </View>
-                )
-              ))}
-            </View>
-            <CustomText style={styles.friendsCookedText}>
-              +{friendsCookedCount} {friendsCookedCount === 1 ? 'friend cooked' : 'friends cooked'}
-            </CustomText>
+          <View
+            ref={friendsSectionRef}
+            collapsable={false}
+            style={styles.friendsCookedWrapper}
+          >
+            <TouchableOpacity
+              onPressIn={() => setFriendsSectionPressed(true)}
+              onPress={() => {
+                if (onFriendsPress && friendsCookedCount > 0) {
+                  // Measure the wrapper View to get exact position
+                  if (friendsSectionRef.current) {
+                    friendsSectionRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+                      onFriendsPress(friendsCooked, item.title || 'Untitled Recipe', { x, y, width, height });
+                    });
+                  } else {
+                    // Fallback
+                    onFriendsPress(friendsCooked, item.title || 'Untitled Recipe', { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2, width: 200, height: 40 });
+                  }
+                }
+                setFriendsSectionPressed(false);
+              }}
+              activeOpacity={0.7}
+              style={styles.friendsCooked}
+            >
+              <View style={styles.friendAvatars}>
+                {friendsCooked.slice(0, 3).map((friend: any, idx: number) => (
+                  friend.avatar_url ? (
+                    <Image
+                      key={friend.id || idx}
+                      source={{ uri: friend.avatar_url }}
+                      style={[styles.friendAvatar, styles.friendAvatarImage, { marginLeft: idx > 0 ? -8 : 0 }]}
+                    />
+                  ) : (
+                    <View
+                      key={friend.id || idx}
+                      style={[styles.friendAvatar, styles.friendAvatarPlaceholder, { marginLeft: idx > 0 ? -8 : 0 }]}
+                    >
+                      <CustomText style={styles.friendAvatarInitial}>
+                        {friend.display_name?.charAt(0).toUpperCase() || '?'}
+                      </CustomText>
+                    </View>
+                  )
+                ))}
+              </View>
+              <CustomText style={styles.friendsCookedText}>
+                +{friendsCookedCount} {friendsCookedCount === 1 ? 'friend cooked' : 'friends cooked'}
+              </CustomText>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -283,6 +348,11 @@ export default function HomeScreen() {
   const [recentlyCookedOrigin, setRecentlyCookedOrigin] = React.useState<OriginRect | null>(null);
   const recentlyCookedTileRef = React.useRef<any>(null);
   const modalAnim = React.useRef(new Animated.Value(0)).current;
+  
+  // Modal state for Friends Cooked
+  const [showFriendsCooked, setShowFriendsCooked] = React.useState(false);
+  const [friendsCookedOrigin, setFriendsCookedOrigin] = React.useState<OriginRect | null>(null);
+  const [friendsCookedData, setFriendsCookedData] = React.useState<{ friends: any[]; recipeTitle?: string } | null>(null);
 
   // Fetch user ID on mount
   useEffect(() => {
@@ -350,6 +420,13 @@ export default function HomeScreen() {
       fetchRecentlyCooked();
     }, [userId])
   );
+
+  // Handler for friends cooked press
+  const handleFriendsCookedPress = (friends: any[], recipeTitle: string, origin: OriginRect) => {
+    setFriendsCookedData({ friends, recipeTitle });
+    setFriendsCookedOrigin(origin);
+    setShowFriendsCooked(true);
+  };
 
   // Search functionality
   useEffect(() => {
@@ -608,6 +685,7 @@ export default function HomeScreen() {
                               router.push({ pathname: '/recipe-detail', params: { id: item.id } });
                               closeDropdown();
                             }}
+                            onFriendsPress={handleFriendsCookedPress}
                           />
                         ))}
                       </View>
@@ -694,6 +772,7 @@ export default function HomeScreen() {
                           item={item}
                           index={index}
                           onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
+                          onFriendsPress={handleFriendsCookedPress}
                         />
                       ))}
                     </View>
@@ -759,6 +838,16 @@ export default function HomeScreen() {
               router={router}
             />
           </ContextualSheet>
+        )}
+        {showFriendsCooked && friendsCookedData && friendsCookedOrigin && (
+          <FriendsPopover
+            visible={showFriendsCooked}
+            friends={friendsCookedData.friends}
+            recipeTitle={friendsCookedData.recipeTitle}
+            router={router}
+            onClose={() => setShowFriendsCooked(false)}
+            origin={friendsCookedOrigin}
+          />
         )}
       </View>
     </TouchableWithoutFeedback>
@@ -871,22 +960,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#E5E7EB',
     paddingHorizontal: 20,
     height: 56,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
   },
   searchBarFocused: {
     borderColor: '#256D85',
-    shadowColor: '#256D85',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    borderWidth: 1.5,
   },
   searchInput: {
     flex: 1,
@@ -1353,6 +1435,9 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
     marginLeft: 4,
+  },
+  friendsCookedWrapper: {
+    alignSelf: 'flex-start',
   },
   friendsCooked: {
     flexDirection: 'row',
