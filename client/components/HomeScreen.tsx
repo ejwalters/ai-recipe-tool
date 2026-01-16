@@ -532,8 +532,10 @@ export default function HomeScreen() {
 
           <ScrollView 
             style={styles.scrollView} 
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) + 120 }]}
             showsVerticalScrollIndicator={false}
+            bounces={true}
+            scrollEventThrottle={16}
           >
             {/* Search Results */}
             {searchTouched && search.length > 0 && (
@@ -680,8 +682,10 @@ export default function HomeScreen() {
                 )}
 
                 {/* Quick Actions */}
-                <View style={styles.sectionContainer}>
-                  <CustomText style={styles.sectionTitle}>Quick Actions</CustomText>
+                <View style={styles.quickActionsSection}>
+                  <View style={styles.quickActionsTitleContainer}>
+                    <CustomText style={styles.sectionTitle}>Quick Actions</CustomText>
+                  </View>
                   <View style={styles.quickActionsContainer}>
                     <TouchableOpacity
                       style={styles.quickActionCard}
@@ -695,13 +699,13 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.quickActionCard}
-                      onPress={() => router.push('/recipes')}
+                      onPress={() => router.push('/add-recipe-manual')}
                       activeOpacity={0.9}
                     >
                       <View style={styles.quickActionIconCircle}>
-                        <Ionicons name="share-social" size={24} color="#256D85" />
+                        <Ionicons name="create-outline" size={24} color="#256D85" />
                       </View>
-                      <CustomText style={styles.quickActionText}>Share Recipe</CustomText>
+                      <CustomText style={styles.quickActionText}>Add Manually</CustomText>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -881,7 +885,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 32,
+    paddingBottom: 0, // Set dynamically based on tab bar height
   },
   gridContainer: {
     flexDirection: 'row',
@@ -1062,6 +1066,14 @@ const styles = StyleSheet.create({
   sectionContainer: {
     marginTop: 24,
     marginBottom: 8,
+  },
+  quickActionsSection: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  quickActionsTitleContainer: {
+    paddingHorizontal: 24,
+    marginBottom: 12,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1312,6 +1324,7 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 24,
+    marginTop: 12,
     gap: 16,
   },
   quickActionCard: {
