@@ -95,11 +95,68 @@ router.get('/list', async (req, res) => {
     
     if (q) {
         // Search both title and ingredients
-        // Since ingredients is stored as a JSON array, we need to search it as text
-        // PostgREST's .or() allows searching multiple columns
-        // Format: column1.operator.value,column2.operator.value
+        // Since ingredients is stored as a JSON array, we need to do separate searches
+        // and combine results (more reliable than .or() with JSON casting)
         const searchPattern = `%${q}%`;
-        query = query.or(`title.ilike.${searchPattern},ingredients::text.ilike.${searchPattern}`);
+        const searchLower = q.toLowerCase();
+        
+        // Build base query for searching
+        let titleQuery = supabase
+            .from('recipes')
+            .select('id')
+            .ilike('title', searchPattern)
+            .limit(200);
+        if (filter_by_user === 'true' && user_id) {
+            titleQuery = titleQuery.eq('user_id', user_id);
+        }
+        
+        // Get all recipes to search ingredients (need to fetch ingredients field)
+        let ingredientsQuery = supabase
+            .from('recipes')
+            .select('id, ingredients')
+            .limit(200);
+        if (filter_by_user === 'true' && user_id) {
+            ingredientsQuery = ingredientsQuery.eq('user_id', user_id);
+        }
+        
+        const [titleResults, allRecipes] = await Promise.all([
+            titleQuery,
+            ingredientsQuery,
+        ]);
+        
+        // Collect matching IDs
+        let matchingIds = new Set();
+        
+        // Add title matches
+        if (!titleResults.error && titleResults.data) {
+            titleResults.data.forEach(r => matchingIds.add(r.id));
+        }
+        
+        // Check ingredients in JavaScript
+        if (!allRecipes.error && allRecipes.data) {
+            allRecipes.data.forEach(recipe => {
+                const ingredients = recipe.ingredients || [];
+                // Check if any ingredient contains the search term
+                if (Array.isArray(ingredients)) {
+                    const hasMatch = ingredients.some(ing => 
+                        String(ing).toLowerCase().includes(searchLower)
+                    );
+                    if (hasMatch) {
+                        matchingIds.add(recipe.id);
+                    }
+                } else if (String(ingredients).toLowerCase().includes(searchLower)) {
+                    matchingIds.add(recipe.id);
+                }
+            });
+        }
+        
+        // Filter query to only include matching IDs
+        if (matchingIds.size > 0) {
+            query = query.in('id', Array.from(matchingIds));
+        } else {
+            // No matches, return empty result by using impossible condition
+            query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+        }
     }
     if (req.query.tags) {
         const tagsArray = req.query.tags.split(',');
