@@ -7,19 +7,19 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
 const PALETTE = {
-    appBackground: '#F4F5FB',
-    chatBackground: '#FFFFFF',
-    header: '#256D85', // App's teal/green accent
-    headerText: '#FFFFFF',
-    aiBubble: '#F7F7FA', // Light beige/gray like the image
-    aiBorder: '#E5E7EB',
+    appBackground: '#FFFFFF',
+    chatBackground: '#F8F8FC',
+    header: '#F3F0FF', // Purple header matching app design
+    headerText: '#1F2937',
+    aiBubble: '#FFFFFF', // White bubbles for AI
+    aiBorder: '#F3F4F6',
     aiText: '#1F2937',
-    userBubble: '#256D85', // App's primary green/teal
+    userBubble: '#256D85', // App's primary teal for user
     userText: '#FFFFFF',
     timestampMuted: '#9CA3AF',
     inputBackground: '#FFFFFF',
     inputBorder: '#E5E7EB',
-    inputShadow: 'rgba(37, 109, 133, 0.12)',
+    inputShadow: 'rgba(0, 0, 0, 0.04)',
     sendEnabled: '#256D85',
     sendDisabled: '#E2E8F0',
     suggestionTag: '#FFFFFF',
@@ -496,8 +496,9 @@ export default function ChatScreen() {
 
     if (loading && messages.length === 0) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top', 'bottom']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.appBackground }} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#256D85" />
                     <CustomText style={styles.loadingText}>Loading chat...</CustomText>
                 </View>
             </SafeAreaView>
@@ -506,7 +507,7 @@ export default function ChatScreen() {
 
     if (!userId) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top', 'bottom']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.appBackground }} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
                     <CustomText style={styles.loadingText}>You must be logged in to chat with the AI Chef.</CustomText>
                 </View>
@@ -523,17 +524,17 @@ export default function ChatScreen() {
                     onPress={() => router.back()}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                    <Ionicons name="arrow-back" size={24} color={PALETTE.headerText} />
                 </TouchableOpacity>
                 <View style={styles.headerTitleContainer}>
-                    <CustomText style={styles.headerTitle}>Recipe Assistant</CustomText>
-                    <CustomText style={styles.headerSubtitle}>AI Chef at your service</CustomText>
+                    <CustomText style={styles.headerTitle}>AI Chef Assistant</CustomText>
+                    <CustomText style={styles.headerSubtitle}>Ask me anything about recipes</CustomText>
                 </View>
                 <TouchableOpacity 
                     style={styles.headerMenuButton}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
+                    <Ionicons name="ellipsis-vertical" size={24} color={PALETTE.headerText} />
                 </TouchableOpacity>
             </View>
             
@@ -555,13 +556,12 @@ export default function ChatScreen() {
                     {messages.length === 0 && (
                         <View style={[styles.messageRow, styles.aiRow, { marginTop: 8 }]}>
                             <View style={styles.aiAvatarCircle}>
-                                <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                                <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
                             </View>
                             <View style={styles.aiMessageContainer}>
-                                <View style={styles.aiBubble}>
-                                    <CustomText style={styles.aiText}>Hi there! I'm your AI recipe assistant. Tell me what ingredients you have, dietary preferences, or what you're craving, and I'll help you create something delicious!</CustomText>
+                                <View style={[styles.aiBubble, styles.welcomeBubble]}>
+                                    <CustomText style={[styles.aiText, styles.welcomeText]}>Hi there! 👋 I'm your AI recipe assistant. Tell me what ingredients you have, dietary preferences, or what you're craving, and I'll help you create something delicious!</CustomText>
                                 </View>
-                                <CustomText style={[styles.timestamp, styles.aiTimestamp]}>Just now</CustomText>
                             </View>
                         </View>
                     )}
@@ -690,7 +690,7 @@ export default function ChatScreen() {
                     <View style={styles.inputBox}>
                         <TextInput
                             style={styles.textInput}
-                            placeholder="Ask for a recipe..."
+                            placeholder="Ask for a recipe or ingredient suggestions..."
                             placeholderTextColor="#9CA3AF"
                             value={message}
                             onChangeText={setMessage}
@@ -739,12 +739,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: 'transparent',
-        elevation: 0,
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 3,
         zIndex: 10,
         paddingTop: Platform.OS === 'ios' ? 48 : 32,
         paddingBottom: 20,
         paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
     },
     headerBackButton: {
         width: 40,
@@ -758,18 +763,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '800',
+        fontSize: 20,
+        fontWeight: '700',
         color: PALETTE.headerText,
         textAlign: 'center',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 14,
-        color: PALETTE.headerText,
+        fontSize: 13,
+        color: '#6B7280',
         textAlign: 'center',
-        marginTop: 2,
-        opacity: 0.9,
+        marginTop: 4,
         fontWeight: '500',
     },
     headerMenuButton: {
@@ -810,30 +814,40 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     aiAvatarCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: PALETTE.header,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#256D85',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
         marginTop: 2,
+        shadowColor: '#256D85',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     userAvatarCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: PALETTE.header,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#256D85',
         justifyContent: 'center',
         alignItems: 'center',
-        marginLeft: 10,
+        marginLeft: 12,
         marginTop: 2,
         overflow: 'hidden',
+        shadowColor: '#256D85',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     userAvatarImage: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
     },
     aiMessageContainer: {
         flex: 1,
@@ -846,27 +860,37 @@ const styles = StyleSheet.create({
     },
     aiBubble: {
         backgroundColor: PALETTE.aiBubble,
-        borderRadius: 18,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        borderRadius: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         shadowColor: 'rgba(0, 0, 0, 0.06)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
         shadowRadius: 8,
         elevation: 2,
         borderWidth: 1,
-        borderColor: PALETTE.aiBorder,
+        borderColor: '#F3F4F6',
+    },
+    welcomeBubble: {
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#FFFFFF',
+    },
+    welcomeText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#374151',
     },
     userBubble: {
         backgroundColor: PALETTE.userBubble,
-        borderRadius: 18,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        shadowColor: 'rgba(37, 109, 133, 0.2)',
+        borderRadius: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        shadowColor: 'rgba(37, 109, 133, 0.25)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
         shadowRadius: 8,
-        elevation: 2,
+        elevation: 3,
     },
     aiBubbleTail: {
         borderBottomLeftRadius: 4,
@@ -938,15 +962,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: PALETTE.inputBackground,
         borderRadius: 24,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         borderWidth: 1,
         borderColor: PALETTE.inputBorder,
         shadowColor: PALETTE.inputShadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
     },
     inputIconButton: {
         width: 36,
@@ -973,6 +997,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 8,
+        shadowColor: PALETTE.sendEnabled,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
     },
     sendButtonDisabled: {
         backgroundColor: PALETTE.sendDisabled,
@@ -983,17 +1012,19 @@ const styles = StyleSheet.create({
     recipeCardModern: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 16,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        marginBottom: 10,
-        shadowColor: 'rgba(0, 0, 0, 0.06)',
-        shadowOffset: { width: 0, height: 2 },
+        borderRadius: 20,
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+        marginBottom: 12,
+        shadowColor: 'rgba(0, 0, 0, 0.08)',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 1,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowRadius: 12,
+        elevation: 3,
         borderWidth: 1,
+        borderColor: '#F3F4F6',
         maxWidth: SCREEN_WIDTH * 0.75,
+        backgroundColor: '#FFFFFF',
     },
     recipeCardRightModern: {
         flex: 1,
@@ -1001,22 +1032,23 @@ const styles = StyleSheet.create({
         minWidth: 0,
     },
     recipeTitleModern: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '700',
         color: '#1F2937',
         textAlign: 'left',
-        marginBottom: 4,
+        marginBottom: 6,
+        letterSpacing: -0.3,
     },
     recipeDescriptionModern: {
-        fontSize: 13,
+        fontSize: 14,
         color: '#6B7280',
-        fontWeight: '400',
+        fontWeight: '500',
         textAlign: 'left',
-        lineHeight: 18,
-        marginBottom: 10,
+        lineHeight: 20,
+        marginBottom: 0,
         flexShrink: 1,
         maxWidth: '100%',
-        letterSpacing: -0.2,
+        letterSpacing: -0.1,
     },
     metaPillWrapperModern: {
         width: '100%',
@@ -1157,30 +1189,12 @@ const styles = StyleSheet.create({
         marginRight: 12,
         backgroundColor: '#D9F1E5',
     },
-    welcomeBubble: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 20,
-        flex: 1,
-        shadowColor: 'rgba(15, 23, 42, 0.08)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 4,
-        maxWidth: SCREEN_WIDTH * 0.85,
-    },
     welcomeTitle: {
         color: '#1F2533',
         fontSize: 18,
         fontWeight: '700',
         marginBottom: 12,
         lineHeight: 24,
-    },
-    welcomeText: {
-        color: '#536072',
-        fontSize: 15,
-        lineHeight: 22,
-        marginBottom: 12,
     },
     welcomeList: {
         marginBottom: 12,
