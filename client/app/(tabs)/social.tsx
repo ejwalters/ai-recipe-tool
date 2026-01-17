@@ -756,55 +756,41 @@ export default function SocialScreen() {
 
           {/* Engagement & Action Row */}
           <View style={styles.feedEngagementRow}>
-            <View style={styles.feedEngagementLeft}>
-              {/* Like Button (Heart) */}
-              <TouchableOpacity
-                style={styles.feedEngagementButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleFeedFavoriteToggle(item);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {item.is_favorited ? (
-                  <Ionicons name="heart" size={20} color="#E4576A" />
-                ) : (
-                  <Ionicons name="heart-outline" size={20} color="#6B7280" />
-                )}
-                {(item.favorite_count || 0) > 0 && (
-                  <CustomText style={styles.feedEngagementCount}>
-                    {item.favorite_count}
-                  </CustomText>
-                )}
-              </TouchableOpacity>
-              
-              {/* Save Button (Bookmark) */}
-              <TouchableOpacity
-                style={styles.feedEngagementButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleFeedSaveToggle(item);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                {item.is_saved ? (
-                  <Ionicons name="bookmark" size={20} color="#256D85" />
-                ) : (
-                  <Ionicons name="bookmark-outline" size={20} color="#6B7280" />
-                )}
-              </TouchableOpacity>
-            </View>
-            
-            {/* Cook This Button */}
+            {/* Like Button (Heart) */}
             <TouchableOpacity
-              style={styles.cookThisButton}
-              activeOpacity={0.85}
+              style={styles.feedEngagementButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handleCardPress();
+                handleFeedFavoriteToggle(item);
               }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <CustomText style={styles.cookThisButtonText}>Cook This</CustomText>
+              {item.is_favorited ? (
+                <Ionicons name="heart" size={20} color="#E4576A" />
+              ) : (
+                <Ionicons name="heart-outline" size={20} color="#6B7280" />
+              )}
+              {(item.favorite_count || 0) > 0 && (
+                <CustomText style={styles.feedEngagementCount}>
+                  {item.favorite_count}
+                </CustomText>
+              )}
+            </TouchableOpacity>
+            
+            {/* Save Button (Bookmark) */}
+            <TouchableOpacity
+              style={styles.feedEngagementButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleFeedSaveToggle(item);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {item.is_saved ? (
+                <Ionicons name="bookmark" size={20} color="#256D85" />
+              ) : (
+                <Ionicons name="bookmark-outline" size={20} color="#6B7280" />
+              )}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1305,11 +1291,6 @@ const styles = StyleSheet.create({
   feedEngagementRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  feedEngagementLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 16,
   },
   feedEngagementButton: {
@@ -1321,18 +1302,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-  },
-  cookThisButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  cookThisButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
   },
   discoverContainer: {
     flex: 1,
