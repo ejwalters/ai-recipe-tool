@@ -19,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import { socialService } from '../../lib/socialService';
 import { supabase } from '../../lib/supabase';
+import { getRecipeIconConfig, getDifficultyLevel } from '../../utils/recipeIcons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type FeedItem = {
   id: string;
@@ -626,43 +628,60 @@ export default function SocialScreen() {
   };
 
   const renderFeedItem = useCallback(
-    ({ item }: { item: FeedItem }) => {
+    ({ item, index }: { item: FeedItem; index: number }) => {
       const tags = Array.isArray(item.tags) ? item.tags : [];
       const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
+      const iconConfig = getRecipeIconConfig(item.title || '', tags, index, item);
+      const difficulty = getDifficultyLevel(item);
       
       return (
-        <TouchableOpacity
-          style={styles.feedCard}
-          activeOpacity={0.88}
-          onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
-        >
+        <View style={styles.feedCard}>
           {/* Author Header */}
           <View style={styles.feedCardHeader}>
             <TouchableOpacity
               style={styles.authorBadge}
               activeOpacity={0.85}
-              onPress={(e) => {
-                e.stopPropagation();
+              onPress={() => {
                 if (item.author?.id) {
                   router.push({ pathname: '/user-profile', params: { user_id: item.author.id } });
                 }
               }}
             >
-              <UserAvatar avatarUrl={item.author?.avatar_url} size={44} />
+              <UserAvatar avatarUrl={item.author?.avatar_url} size={40} />
               <View style={styles.authorInfo}>
                 <CustomText style={styles.authorName}>
                   {item.author?.display_name || item.author?.username || 'Unknown Chef'}
                 </CustomText>
-                <View style={styles.authorMetaRow}>
-                  <CustomText style={styles.authorHandle}>
-                    @{item.author?.username || 'chef'}
-                  </CustomText>
-                  <CustomText style={styles.feedCardTimestamp}>
-                    • {formatRelativeTime(item.created_at)}
-                  </CustomText>
-                </View>
+                <CustomText style={styles.feedCardTimestamp}>
+                  {formatRelativeTime(item.created_at)}
+                </CustomText>
               </View>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.moreButton}
+              activeOpacity={0.7}
+              onPress={() => {}}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Recipe Icon Display */}
+          <View style={[styles.recipeIconDisplay, { backgroundColor: iconConfig.backgroundColor }]}>
+            {iconConfig.library === 'MaterialCommunityIcons' ? (
+              <MaterialCommunityIcons 
+                name={iconConfig.name as any} 
+                size={120} 
+                color={iconConfig.iconColor} 
+              />
+            ) : (
+              <Ionicons 
+                name={iconConfig.name as any} 
+                size={120} 
+                color={iconConfig.iconColor} 
+              />
+            )}
           </View>
 
           {/* Recipe Title */}
@@ -670,81 +689,103 @@ export default function SocialScreen() {
             {item.title}
           </CustomText>
 
-          {/* Recipe Metadata Row */}
-          <View style={styles.feedCardMetaRow}>
+          {/* Recipe Metrics Row */}
+          <View style={styles.feedCardMetricsRow}>
             {!!item.time && (
-              <View style={styles.feedMetaChip}>
-                <Ionicons name="time-outline" size={14} color="#64748B" />
-                <CustomText style={styles.feedMetaChipText}>{item.time}</CustomText>
+              <View style={styles.feedMetricItem}>
+                <Ionicons name="time-outline" size={16} color="#10B981" />
+                <CustomText style={styles.feedMetricText}>{item.time}</CustomText>
               </View>
             )}
             {ingredients.length > 0 && (
-              <View style={styles.feedMetaChip}>
-                <Ionicons name="list-outline" size={14} color="#64748B" />
-                <CustomText style={styles.feedMetaChipText}>
-                  {ingredients.length} {ingredients.length === 1 ? 'ingredient' : 'ingredients'}
+              <View style={styles.feedMetricItem}>
+                <Ionicons name="list-outline" size={16} color="#F59E0B" />
+                <CustomText style={styles.feedMetricText}>
+                  {ingredients.length} {ingredients.length === 1 ? 'ing' : 'ing'}
                 </CustomText>
               </View>
             )}
-            {(item.favorite_count || 0) > 0 && (
-              <View style={styles.feedMetaChip}>
-                <Ionicons name="heart" size={14} color="#E4576A" />
-                <CustomText style={[styles.feedMetaChipText, styles.favoriteCountText]}>
-                  {item.favorite_count}
-                </CustomText>
-              </View>
-            )}
+            <View style={styles.feedMetricItem}>
+              <Ionicons name="trending-up-outline" size={16} color="#10B981" />
+              <CustomText style={[styles.feedMetricText, { color: difficulty.color }]}>
+                {difficulty.text}
+              </CustomText>
+            </View>
           </View>
 
           {/* Tags */}
           {tags.length > 0 && (
             <View style={styles.feedTagsRow}>
-              {tags.slice(0, 3).map(tag => (
-                <View key={tag} style={styles.feedTagChip}>
-                  <CustomText style={styles.feedTagText}>{tag}</CustomText>
-                </View>
-              ))}
+              {tags.slice(0, 3).map((tag, tagIndex) => {
+                const tagColors = [
+                  { bg: '#F0FDF4', text: '#16A34A' }, // Green
+                  { bg: '#FEF3C7', text: '#D97706' }, // Orange/Amber
+                  { bg: '#E0F2FE', text: '#0284C7' }, // Blue
+                ];
+                const tagColor = tagColors[tagIndex % tagColors.length];
+                return (
+                  <View key={tag} style={[styles.feedTagChip, { backgroundColor: tagColor.bg }]}>
+                    <CustomText style={[styles.feedTagText, { color: tagColor.text }]}>{tag}</CustomText>
+                  </View>
+                );
+              })}
               {tags.length > 3 && (
                 <CustomText style={styles.moreTagsText}>+{tags.length - 3} more</CustomText>
               )}
             </View>
           )}
 
-          {/* Action Buttons - Like and Save */}
-          <View style={styles.feedActionButtons}>
-            {/* Like Button (Heart) */}
-            <TouchableOpacity
-              style={styles.feedActionButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleFeedFavoriteToggle(item);
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              {item.is_favorited ? (
-                <Ionicons name="heart" size={20} color="#E4576A" />
-              ) : (
-                <Ionicons name="heart-outline" size={20} color="#94A3B8" />
-              )}
-            </TouchableOpacity>
+          {/* Engagement & Action Row */}
+          <View style={styles.feedEngagementRow}>
+            <View style={styles.feedEngagementLeft}>
+              {/* Like Button (Heart) */}
+              <TouchableOpacity
+                style={styles.feedEngagementButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleFeedFavoriteToggle(item);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {item.is_favorited ? (
+                  <Ionicons name="heart" size={20} color="#E4576A" />
+                ) : (
+                  <Ionicons name="heart-outline" size={20} color="#6B7280" />
+                )}
+                {(item.favorite_count || 0) > 0 && (
+                  <CustomText style={styles.feedEngagementCount}>
+                    {item.favorite_count}
+                  </CustomText>
+                )}
+              </TouchableOpacity>
+              
+              {/* Save Button (Bookmark) */}
+              <TouchableOpacity
+                style={styles.feedEngagementButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleFeedSaveToggle(item);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {item.is_saved ? (
+                  <Ionicons name="bookmark" size={20} color="#256D85" />
+                ) : (
+                  <Ionicons name="bookmark-outline" size={20} color="#6B7280" />
+                )}
+              </TouchableOpacity>
+            </View>
             
-            {/* Save Button (Bookmark) */}
+            {/* Cook This Button */}
             <TouchableOpacity
-              style={styles.feedActionButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleFeedSaveToggle(item);
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.cookThisButton}
+              activeOpacity={0.85}
+              onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
             >
-              {item.is_saved ? (
-                <Ionicons name="bookmark" size={20} color="#256D85" />
-              ) : (
-                <Ionicons name="bookmark-outline" size={20} color="#94A3B8" />
-              )}
+              <CustomText style={styles.cookThisButtonText}>Cook This</CustomText>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       );
     },
     [router, handleFeedFavoriteToggle, handleFeedSaveToggle]
@@ -852,12 +893,14 @@ export default function SocialScreen() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
+          <TouchableOpacity style={styles.menuButton} activeOpacity={0.7}>
+            <Ionicons name="menu" size={24} color="#1F2937" />
+          </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <CustomText style={styles.headerTitle}>Community Kitchen</CustomText>
-            <CustomText style={styles.headerTagline}>From people you follow and new cooks to discover.</CustomText>
+            <CustomText style={styles.headerTitle}>Recipe Feed</CustomText>
           </View>
-          <TouchableOpacity style={styles.bellIconButton}>
-            <Ionicons name="notifications-outline" size={24} color="#1F2937" />
+          <TouchableOpacity style={styles.searchIconButton} activeOpacity={0.7}>
+            <Ionicons name="search" size={24} color="#1F2937" />
           </TouchableOpacity>
         </View>
 
@@ -891,8 +934,6 @@ export default function SocialScreen() {
                 style={[
                   styles.segmentButton,
                   isActive && styles.segmentButtonActive,
-                  index === 0 && styles.segmentButtonFirst,
-                  index === SEGMENTS.length - 1 && styles.segmentButtonLast,
                 ]}
                 onPress={() => setActiveSegment(segment.id)}
                 activeOpacity={0.85}
@@ -916,7 +957,7 @@ export default function SocialScreen() {
             <FlatList
               data={feed}
               keyExtractor={item => item.id}
-              renderItem={renderFeedItem}
+              renderItem={({ item, index }) => renderFeedItem({ item, index })}
               contentContainerStyle={styles.listContent}
               refreshControl={
                 <RefreshControl
@@ -1014,32 +1055,31 @@ const styles = StyleSheet.create({
   },
   headerTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1F2937',
-    letterSpacing: -0.5,
-  },
-  headerTagline: {
-    marginTop: 4,
-    fontSize: 15,
-    color: '#6B7280',
-    fontWeight: '400',
-    letterSpacing: 0.2,
-  },
-  bellIconButton: {
+  menuButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: -0.3,
+  },
+  searchIconButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerSearchBar: {
     flexDirection: 'row',
@@ -1059,42 +1099,28 @@ const styles = StyleSheet.create({
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 4,
-    gap: 0,
-    marginTop: 16,
+    gap: 12,
+    marginTop: 8,
   },
   segmentButton: {
-    flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: 'transparent',
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    minWidth: 100,
   },
   segmentButtonActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  segmentButtonFirst: {
-    marginRight: 0,
-  },
-  segmentButtonLast: {
-    marginLeft: 0,
+    backgroundColor: '#10B981',
   },
   segmentLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
   },
   segmentLabelActive: {
-    color: '#1F2937',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   feedFooter: {
@@ -1111,171 +1137,137 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 32,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 14,
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
-  },
   feedCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
-    shadowColor: 'rgba(15, 23, 42, 0.08)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: '#EEF2FF',
-    position: 'relative',
+    borderColor: '#F3F4F6',
   },
   feedCardHeader: {
-    marginBottom: 14,
-  },
-  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  moreButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   authorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   authorInfo: {
-    marginLeft: 14,
+    marginLeft: 12,
     flex: 1,
   },
   authorName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.2,
   },
-  authorMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  authorHandle: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-  },
   feedCardTimestamp: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  cardTimestamp: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  recipeIconDisplay: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    backgroundColor: '#F3F4F6',
   },
   feedCardTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 28,
-    marginBottom: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+    lineHeight: 26,
+    marginBottom: 12,
     letterSpacing: -0.3,
   },
-  cardTitle: {
-    marginTop: 12,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  feedCardMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 14,
-  },
-  cardMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 12,
-    gap: 8,
-  },
-  feedMetaChip: {
+  feedCardMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 6,
+    gap: 16,
+    marginBottom: 12,
   },
-  metaChip: {
+  feedMetricItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
     gap: 6,
   },
-  feedMetaChipText: {
+  feedMetricText: {
     fontSize: 13,
-    color: '#475569',
     fontWeight: '600',
-  },
-  metaChipText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  favoriteCountText: {
-    color: '#E4576A',
+    color: '#6B7280',
   },
   feedTagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
   },
   feedTagChip: {
-    backgroundColor: '#F0F9F4',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   feedTagText: {
     fontSize: 12,
-    color: '#2F855A',
-    fontWeight: '700',
+    fontWeight: '600',
   },
   moreTagsText: {
     fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '600',
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
-  feedActionButtons: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
+  feedEngagementRow: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  feedActionButton: {
-    width: 36,
-    height: 36,
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    justifyContent: 'space-between',
+  },
+  feedEngagementLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  feedEngagementButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  feedEngagementCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  cookThisButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  cookThisButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   discoverContainer: {
     flex: 1,
