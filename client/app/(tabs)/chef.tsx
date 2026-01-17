@@ -37,13 +37,18 @@ export default function ChefScreen() {
     }, []);
 
     // Fetch chats when userId is available or when screen is focused
-    const fetchChats = useCallback((searchTerm = '', isSearch = false) => {
+    const fetchChats = useCallback((searchTerm = '', isSearch = false, skipLoadingState = false) => {
         if (!userId) return;
         
-        if (isSearch) {
-            setSearching(true);
-        } else {
-            setLoading(true);
+        if (!skipLoadingState) {
+            if (isSearch) {
+                setSearching(true);
+            } else {
+                // Only set loading if we don't have existing chats (prevents flicker on refocus)
+                if (chats.length === 0) {
+                    setLoading(true);
+                }
+            }
         }
         
         // Build URL with search query if provided
@@ -69,7 +74,7 @@ export default function ChefScreen() {
                     setLoading(false);
                 }
             });
-    }, [userId]);
+    }, [userId, chats.length]);
 
     // Debounced search effect
     useEffect(() => {
@@ -82,13 +87,15 @@ export default function ChefScreen() {
 
     useFocusEffect(
         useCallback(() => {
+            // Only refresh if we have existing chats (silent refresh to prevent flicker)
             // Small delay to ensure backend has finished updating summaries after messages
             const timer = setTimeout(() => {
-                fetchChats('', false); // Load all chats when screen is focused
+                const hasExistingChats = chats.length > 0;
+                fetchChats('', false, hasExistingChats); // Skip loading state if we have existing data
             }, 300); // 300ms delay to ensure backend has processed any recent updates
             
             return () => clearTimeout(timer);
-        }, [fetchChats])
+        }, [fetchChats, chats.length])
     );
 
     // Pulsing animation for search
