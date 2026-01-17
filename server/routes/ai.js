@@ -725,38 +725,40 @@ RECIPE COUNT: ${recipeNames.length > 0 ? `${recipeNames.length} recipe${recipeNa
 
 Create a summary with TWO parts separated by a pipe character (|):
 
-1. TITLE (MAX 22 characters, MUST be complete and fit on one line):
+1. TITLE (MAX 35 characters, MUST be complete - no truncation, no quotation marks):
    - Extract the MAIN TOPIC from the first user message - use the KEY INGREDIENT or CATEGORY
-   - If user mentioned specific ingredients (e.g., "polenta and cottage cheese"), create title like "Polenta Recipes" or "Cottage Cheese Ideas"
+   - If user mentioned specific ingredients (e.g., "polenta and cottage cheese"), create title like "Polenta Recipes" or "Cottage Cheese & Beef"
    - If user asked for ideas/categories (e.g., "dinner ideas"), use "Dinner Ideas" or "Quick Dinners"
-   - MUST be 22 characters or LESS - prioritize shorter, clearer titles
-   - Use abbreviations: "&" not "and"
-   - Focus on the PRIMARY topic, not secondary details
-   - Examples: "Polenta Recipes" (16), "Cottage Cheese" (15), "Quick Dinners" (13), "Breakfast Ideas" (16)
+   - MUST be 35 characters or LESS - make it clear and descriptive
+   - Use abbreviations: "&" not "and" when needed
+   - Focus on the PRIMARY topic with key ingredients if mentioned
+   - DO NOT use quotation marks around the title
+   - Examples: "Polenta Recipes" (16), "Cottage Cheese & Beef" (22), "Quick Dinners" (13), "Breakfast Ideas" (16)
 
-2. DESCRIPTION (MAX 45 characters, MUST be complete):
-   - If recipes exist: "[X] recipes generated" or "[X] recipe[X] generated"
+2. DESCRIPTION (MAX 60 characters, MUST be complete - no truncation):
+   - If recipes exist: "[X] recipes generated" (simple and clear)
    - If no recipes: Brief topic description (e.g., "Cooking tips discussed", "Ingredient substitutions")
-   - MUST be 45 characters or LESS
-   - Keep it simple and scannable
+   - MUST be 60 characters or LESS
+   - Keep it simple, clear, and informative
    - Examples: "2 recipes generated" (20), "3 recipes created" (20), "Cooking tips shared" (20)
 
 CRITICAL CONSTRAINTS:
-- TITLE: MAX 22 characters - MUST be complete, NO truncation, NO ellipses
-- DESCRIPTION: MAX 45 characters - MUST be complete, NO truncation, NO ellipses
+- TITLE: MAX 35 characters - MUST be complete, NO truncation, NO ellipses, NO quotation marks
+- DESCRIPTION: MAX 60 characters - MUST be complete, NO truncation, NO ellipses
 - Both parts must be FULLY readable and complete
-- TITLE should be the PRIMARY topic/ingredient from first message
+- TITLE should be the PRIMARY topic/ingredient from first message - make it descriptive and clear
 - DESCRIPTION should be simple and informative
+- NEVER use quotation marks in the title or description
 - Count every character including spaces before responding
 
 Format: TITLE|DESCRIPTION
 
 Examples (character counts shown):
-- "Polenta Recipes|2 recipes generated" (title: 16, desc: 20)
-- "Cottage Cheese|2 recipes generated" (title: 15, desc: 20)
-- "Quick Dinners|3 recipes created" (title: 13, desc: 20)
-- "Breakfast Ideas|2 recipes generated" (title: 16, desc: 20)
-- "Cooking Tips|Pasta tips shared" (title: 13, desc: 20)
+- Polenta Recipes|2 recipes generated (title: 16, desc: 20)
+- Cottage Cheese & Beef|2 recipes generated (title: 22, desc: 20)
+- Quick Dinners|3 recipes created (title: 13, desc: 20)
+- Breakfast Ideas|2 recipes generated (title: 16, desc: 20)
+- Cooking Tips|Pasta tips shared (title: 13, desc: 20)
 `;
     
     try {
@@ -781,26 +783,30 @@ Examples (character counts shown):
             let finalTitle = trimmedTitle;
             let finalDesc = trimmedDesc;
             
+            // Remove any quotation marks that might have been added
+            finalTitle = finalTitle.replace(/^["']|["']$/g, '').trim();
+            finalDesc = finalDesc.replace(/^["']|["']$/g, '').trim();
+            
             // Ensure title is within limit
-            if (finalTitle.length > 22) {
+            if (finalTitle.length > 35) {
                 console.warn(`Title too long (${finalTitle.length} chars): ${finalTitle}`);
                 // Try to create a better title from first words
                 const words = finalTitle.split(' ');
                 let shortened = '';
                 for (const word of words) {
-                    if (shortened.length + word.length + 1 <= 22) {
+                    if (shortened.length + word.length + 1 <= 35) {
                         shortened += (shortened ? ' ' : '') + word;
                     } else {
                         break;
                     }
                 }
-                finalTitle = shortened || finalTitle.substring(0, 22);
+                finalTitle = shortened || finalTitle.substring(0, 35);
             }
             
             // Ensure description is within limit
-            if (finalDesc.length > 45) {
+            if (finalDesc.length > 60) {
                 console.warn(`Description too long (${finalDesc.length} chars): ${finalDesc}`);
-                finalDesc = finalDesc.substring(0, 45);
+                finalDesc = finalDesc.substring(0, 60);
             }
             
             return `${finalTitle}|${finalDesc}`;
@@ -814,15 +820,21 @@ Examples (character counts shown):
             // Create title from first 2-3 meaningful words
             let fallbackTitle = 'Chat Conversation';
             if (words.length > 0) {
-                const titleWords = words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1));
-                const candidateTitle = titleWords.join(' ') + (recipeNames.length > 0 ? ' Recipes' : '');
-                if (candidateTitle.length <= 22) {
-                    fallbackTitle = candidateTitle;
-                } else {
-                    fallbackTitle = titleWords[0] + ' Recipes';
-                    if (fallbackTitle.length > 22) {
-                        fallbackTitle = titleWords[0];
+                const titleWords = words.slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1));
+                // Try to include key ingredients with "&" if multiple
+                if (titleWords.length >= 2) {
+                    const candidateTitle = titleWords.slice(0, 2).join(' & ') + (recipeNames.length > 0 ? ' Recipes' : '');
+                    if (candidateTitle.length <= 35) {
+                        fallbackTitle = candidateTitle;
+                    } else {
+                        fallbackTitle = titleWords[0] + (recipeNames.length > 0 ? ' Recipes' : '');
                     }
+                } else {
+                    fallbackTitle = titleWords[0] + (recipeNames.length > 0 ? ' Recipes' : '');
+                }
+                // Ensure it doesn't exceed limit
+                if (fallbackTitle.length > 35) {
+                    fallbackTitle = fallbackTitle.substring(0, 35);
                 }
             }
             
@@ -841,9 +853,16 @@ Examples (character counts shown):
         
         let fallbackTitle = 'Chat Conversation';
         if (words.length > 0) {
-            const titleWords = words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1));
-            const candidateTitle = titleWords.join(' ') + (recipeNames.length > 0 ? ' Recipes' : '');
-            fallbackTitle = candidateTitle.length <= 22 ? candidateTitle : (titleWords[0] || 'Chat Conversation');
+            const titleWords = words.slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1));
+            if (titleWords.length >= 2) {
+                const candidateTitle = titleWords.slice(0, 2).join(' & ') + (recipeNames.length > 0 ? ' Recipes' : '');
+                fallbackTitle = candidateTitle.length <= 35 ? candidateTitle : (titleWords[0] + (recipeNames.length > 0 ? ' Recipes' : ''));
+            } else {
+                fallbackTitle = titleWords[0] + (recipeNames.length > 0 ? ' Recipes' : '');
+            }
+            if (fallbackTitle.length > 35) {
+                fallbackTitle = fallbackTitle.substring(0, 35);
+            }
         }
         
         const recipeNum = recipeNames.length > 0 ? recipeNames.length : recipeCount;
