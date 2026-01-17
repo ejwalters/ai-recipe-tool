@@ -282,6 +282,7 @@ export default function SocialScreen() {
     });
   }, []);
 
+  const [showSearch, setShowSearch] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
   const [suggestedCreators, setSuggestedCreators] = useState<UserResult[]>([]);
@@ -291,6 +292,7 @@ export default function SocialScreen() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSearchedRef = useRef(false); // Track if user has performed at least one search
   const suggestedLoadedRef = useRef(false); // Track if suggested creators have been loaded
+  const searchInputRef = useRef<TextInput>(null);
 
   const loadFeed = useCallback(async (isInitial = false, offset = 0) => {
     setFeedError(null);
@@ -392,41 +394,22 @@ export default function SocialScreen() {
 
   // Removed - handleRefreshFeed now directly calls loadFeed
 
-  // Load suggested creators when discover tab is active and search is empty
+  // Focus search input when search is shown
   useEffect(() => {
-    if (activeSegment !== 'discover') {
-      // Reset when switching away from discover so we can reload when switching back
-      suggestedLoadedRef.current = false;
-      return;
+    if (showSearch && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
     }
+  }, [showSearch]);
 
-    // Only load if search is empty and we haven't loaded yet
-    if (!searchTerm.trim() && !suggestedLoadedRef.current) {
-      suggestedLoadedRef.current = true; // Set immediately to prevent duplicate calls
-      setLoadingSuggested(true);
-      socialService.getSuggestedCreators()
-        .then(results => {
-          setSuggestedCreators(Array.isArray(results) ? results : []);
-        })
-        .catch((error: any) => {
-          console.log('[social] getSuggestedCreators error', error);
-        })
-        .finally(() => {
-          setLoadingSuggested(false);
-        });
-    }
-  }, [activeSegment, searchTerm]);
-
+  // Search users when search term changes
   useEffect(() => {
-    if (activeSegment !== 'discover') {
-      return;
-    }
-
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
 
-    if (!searchTerm.trim()) {
+    if (!showSearch || !searchTerm.trim()) {
       setSearchResults([]);
       setSearching(false);
       setSearchError(null);
@@ -461,7 +444,7 @@ export default function SocialScreen() {
         clearTimeout(debounceRef.current);
       }
     };
-  }, [searchTerm, activeSegment]);
+  }, [searchTerm, showSearch]);
 
   const handleFollowToggle = useCallback(async (user: UserResult) => {
     const optimisticValue = !user.is_following;
@@ -477,6 +460,21 @@ export default function SocialScreen() {
     setSuggestedCreators(prev =>
       prev.map(item =>
         item.id === user.id ? { ...item, is_following: optimisticValue } : item
+      )
+    );
+
+    // Update follower count optimistically
+    setSearchResults(prev =>
+      prev.map(item =>
+        item.id === user.id 
+          ? { 
+              ...item, 
+              is_following: optimisticValue,
+              follower_count: optimisticValue 
+                ? (item.follower_count || 0) + 1 
+                : Math.max((item.follower_count || 0) - 1, 0)
+            } 
+          : item
       )
     );
 
@@ -909,10 +907,45 @@ export default function SocialScreen() {
           <View style={styles.headerTitleContainer}>
             <CustomText style={styles.headerTitle}>Recipe Feed</CustomText>
           </View>
-          <TouchableOpacity style={styles.searchIconButton} activeOpacity={0.7}>
-            <Ionicons name="search" size={24} color="#1F2937" />
+          <TouchableOpacity 
+            style={styles.searchIconButton} 
+            activeOpacity={0.7}
+            onPress={() => {
+              setShowSearch(!showSearch);
+              if (!showSearch) {
+                setSearchTerm('');
+                setSearchResults([]);
+              }
+            }}
+          >
+            <Ionicons name={showSearch ? "close" : "search"} size={24} color="#1F2937" />
           </TouchableOpacity>
         </View>
+
+        {/* Search Bar */}
+        {showSearch && (
+          <View style={styles.searchBarContainer}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 12 }} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchInput}
+                placeholder="Search chefs and food lovers..."
+                placeholderTextColor="#9CA3AF"
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {searchTerm ? (
+                <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         <View style={styles.segmentContainer}>
           {SEGMENTS.map((segment, index) => {
@@ -938,7 +971,45 @@ export default function SocialScreen() {
         </View>
       </View>
 
-      {(activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') ? (
+      {showSearch ? (
+        <View style={styles.searchContainer}>
+          {searching && searchResults.length === 0 ? (
+            <View style={styles.searchLoadingContainer}>
+              <ActivityIndicator size="large" color="#10B981" />
+              <CustomText style={styles.searchLoadingText}>Searching...</CustomText>
+            </View>
+          ) : searchError ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="alert-circle-outline" size={56} color="#EF4444" />
+              <CustomText style={styles.emptyHeading}>Search Error</CustomText>
+              <CustomText style={styles.emptyText}>{searchError}</CustomText>
+            </View>
+          ) : searchTerm.trim() && searchResults.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="person-add-outline" size={56} color="#9CA3AF" />
+              <CustomText style={styles.emptyHeading}>No creators found</CustomText>
+              <CustomText style={styles.emptyText}>Try a different search term</CustomText>
+            </View>
+          ) : searchTerm.trim() ? (
+            <FlatList
+              data={searchResults}
+              keyExtractor={item => item.id}
+              renderItem={renderUserRow}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={64} color="#9CA3AF" />
+              <CustomText style={styles.emptyHeading}>Search for creators</CustomText>
+              <CustomText style={styles.emptyText}>
+                Find friends, family, or favorite creators to follow
+              </CustomText>
+            </View>
+          )}
+        </View>
+      ) : (activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') ? (
         <View style={styles.feedContainer}>
           {loadingFeed && !feedLoadedRef.current ? (
             <FeedLoadingSkeleton />
@@ -1011,6 +1082,52 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchBarContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 20,
+    height: 56,
+    width: '100%',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1F2937',
+    fontFamily: 'System',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  searchContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  searchLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  searchLoadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   headerSearchBar: {
     flexDirection: 'row',
