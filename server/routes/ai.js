@@ -72,21 +72,64 @@ router.post('/chat', async (req, res) => {
 You are an AI chef assistant. The user has the following dietary preferences and restrictions: ${dietaryPreferences || 'None provided'}.
 When the user asks for a recipe, ALWAYS try to provide the best possible recipe that respects their dietary preferences and allergies. If the requested dish is not possible as-is, suggest creative substitutions or alternatives that fit their restrictions. Only decline if there is absolutely no safe or reasonable way to adapt the request, and in that case, suggest a similar recipe that does fit their needs.
 
-Respond with a JSON object containing the following fields:
-- name (string)
-- time (string, e.g. "30 min")
-- tags (array of strings, e.g. ["Kid Friendly", "Vegan"])
-- ingredients (array of strings, e.g. ["1 cup flour", "2 eggs"])
-- steps (array of strings, e.g. ["Mix the flour and eggs.", "Bake for 20 minutes."])
-- is_recipe (boolean, true if this is a recipe, false otherwise)
+WHEN PROVIDING RECIPES:
+- If the user asks for multiple options (e.g., "quick dinner ideas", "dessert recipes", "healthy options"), return 2-3 recipe suggestions.
+- If the user asks for a specific recipe or ingredient-based recipe, return 1-2 similar variations.
+- For general recipe requests, provide 2-3 diverse options when appropriate.
+
+Respond with a JSON object using ONE of these formats:
+
+1. MULTIPLE RECIPES (when user asks for options/ideas):
+{
+  "is_recipe": true,
+  "recipes": [
+    {
+      "name": "Recipe 1 name",
+      "time": "30 min",
+      "tags": ["Tag1", "Tag2"],
+      "ingredients": ["ingredient 1", "ingredient 2"],
+      "steps": ["step 1", "step 2"]
+    },
+    {
+      "name": "Recipe 2 name",
+      "time": "25 min",
+      "tags": ["Tag1"],
+      "ingredients": ["ingredient 1", "ingredient 2"],
+      "steps": ["step 1", "step 2"]
+    }
+  ],
+  "intro_text": "Here are some great options:"
+}
+
+2. SINGLE RECIPE (when user asks for a specific recipe):
+{
+  "is_recipe": true,
+  "recipes": [
+    {
+      "name": "Recipe name",
+      "time": "30 min",
+      "tags": ["Tag1", "Tag2"],
+      "ingredients": ["ingredient 1", "ingredient 2"],
+      "steps": ["step 1", "step 2"]
+    }
+  ],
+  "intro_text": "Here's a great recipe for you:"
+}
+
+3. CONVERSATIONAL RESPONSE (not a recipe request):
+{
+  "is_recipe": false,
+  "text": "Your helpful response here. You can answer questions, provide cooking advice, or help with ingredient substitutions."
+}
 
 IMPORTANT:
-- For the "ingredients" and "steps" fields, ALWAYS return a JSON array of strings. Each string should be a single ingredient or a single step. DO NOT join multiple items in a single string using commas, pipes, or any other delimiter. DO NOT return a single string with embedded newlines or delimiters.
-- Example: "ingredients": ["1 cup flour", "2 eggs"], NOT "ingredients": "1 cup flour, 2 eggs" or "1 cup flour||2 eggs" or "1 cup flour\\n2 eggs".
-- Example: "steps": ["Mix the flour and eggs.", "Bake for 20 minutes."], NOT "steps": "Mix the flour and eggs. Bake for 20 minutes." or "Mix the flour and eggs.||Bake for 20 minutes."
-- Do not include any text outside the JSON object if returning a recipe.
-
-For non-recipe responses, always return a JSON object with "is_recipe": false and a helpful "text" field (e.g. "Sorry, I don't have a recipe for that, but I can help with something else!"). Never return just {"is_recipe": false}—always include a "text" field with a helpful message.
+- The "recipes" array should contain 1-3 recipe objects.
+- For "ingredients" and "steps" fields in each recipe, ALWAYS return a JSON array of strings. Each string should be a single ingredient or step.
+- Example: "ingredients": ["1 cup flour", "2 eggs"], NOT "ingredients": "1 cup flour, 2 eggs"
+- Example: "steps": ["Mix the flour and eggs.", "Bake for 20 minutes."], NOT "steps": "Mix the flour and eggs. Bake for 20 minutes."
+- Always include an "intro_text" field when providing recipes to give context.
+- For non-recipe responses, always include a helpful "text" field with your response.
+- Users can ask follow-up questions about the recipes - maintain conversation context and be helpful.
 `
         };
         const openaiMessages = [systemPrompt, ...messages.map(m => ({ role: m.role, content: m.content }))];
@@ -104,16 +147,19 @@ For non-recipe responses, always return a JSON object with "is_recipe": false an
             const parsed = JSON.parse(aiResponse);
             if (parsed && parsed.is_recipe) {
                 console.log('Parsed Recipe Object:', parsed);
+                if (parsed.recipes) {
+                    console.log(`Found ${parsed.recipes.length} recipe(s)`);
+                }
             }
         } catch (e) {
             console.log('AI response is not valid JSON:', e.message);
         }
 
-        // 5. Store AI response
+        // 5. Store AI response - normalize recipe data
         let normalizedContent = aiResponse;
         try {
             const parsed = JSON.parse(aiResponse);
-            if (parsed && parsed.is_recipe) {
+            if (parsed && parsed.is_recipe && parsed.recipes) {
                 function toArray(val) {
                     if (Array.isArray(val)) return val;
                     if (typeof val === 'string') {
@@ -125,13 +171,47 @@ For non-recipe responses, always return a JSON object with "is_recipe": false an
                     }
                     return [];
                 }
-                parsed.tags = toArray(parsed.tags);
-                parsed.ingredients = toArray(parsed.ingredients);
-                parsed.steps = toArray(parsed.steps);
+                
+                // Normalize each recipe in the recipes array
+                parsed.recipes = parsed.recipes.map(recipe => ({
+                    ...recipe,
+                    tags: toArray(recipe.tags),
+                    ingredients: toArray(recipe.ingredients),
+                    steps: toArray(recipe.steps)
+                }));
+                
                 normalizedContent = JSON.stringify(parsed, null, 2);
+            } else if (parsed && parsed.is_recipe && parsed.name) {
+                // Legacy single recipe format - convert to recipes array
+                function toArray(val) {
+                    if (Array.isArray(val)) return val;
+                    if (typeof val === 'string') {
+                        if (val.includes('||')) return val.split('||').map(s => s.trim());
+                        if (val.includes('\\n')) return val.split('\\n').map(s => s.trim());
+                        if (val.includes('\n')) return val.split('\n').map(s => s.trim());
+                        if (val.split(',').length > 1) return val.split(',').map(s => s.trim());
+                        return [val];
+                    }
+                    return [];
+                }
+                
+                const normalizedRecipe = {
+                    is_recipe: true,
+                    recipes: [{
+                        name: parsed.name,
+                        time: parsed.time,
+                        tags: toArray(parsed.tags),
+                        ingredients: toArray(parsed.ingredients),
+                        steps: toArray(parsed.steps)
+                    }],
+                    intro_text: parsed.intro_text || "Here's a great recipe for you:"
+                };
+                
+                normalizedContent = JSON.stringify(normalizedRecipe, null, 2);
             }
         } catch (e) {
             // Not valid JSON, leave as is
+            console.log('Error normalizing content:', e.message);
         }
 
         const { data: insertedMessage, error: insertError } = await supabase

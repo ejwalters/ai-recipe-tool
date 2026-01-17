@@ -7,19 +7,19 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
 const PALETTE = {
-    appBackground: '#F4F5FB',
-    chatBackground: '#FFFFFF',
-    header: '#256D85', // App's teal/green accent
-    headerText: '#FFFFFF',
-    aiBubble: '#F7F7FA', // Light beige/gray like the image
-    aiBorder: '#E5E7EB',
+    appBackground: '#FFFFFF',
+    chatBackground: '#F8F8FC',
+    header: '#F3F0FF', // Purple header matching app design
+    headerText: '#1F2937',
+    aiBubble: '#FFFFFF', // White bubbles for AI
+    aiBorder: '#F3F4F6',
     aiText: '#1F2937',
-    userBubble: '#256D85', // App's primary green/teal
+    userBubble: '#256D85', // App's primary teal for user
     userText: '#FFFFFF',
     timestampMuted: '#9CA3AF',
     inputBackground: '#FFFFFF',
     inputBorder: '#E5E7EB',
-    inputShadow: 'rgba(37, 109, 133, 0.12)',
+    inputShadow: 'rgba(0, 0, 0, 0.04)',
     sendEnabled: '#256D85',
     sendDisabled: '#E2E8F0',
     suggestionTag: '#FFFFFF',
@@ -86,7 +86,7 @@ const AITypingIndicator = () => {
     return (
         <View style={styles.messageRow}>
             <View style={styles.aiAvatarCircle}>
-                <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
             </View>
             <View style={styles.typingCard}>
                 <View style={styles.typingHeader}>
@@ -151,7 +151,7 @@ function extractJsonFromString(str: string) {
 }
 
 // Custom Recipe Card Message Component
-const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => void }) => {
+const RecipeCardMessage = ({ message, onPress, onSave, saved }: { message: any; onPress: () => void; onSave?: () => void; saved?: boolean }) => {
     // Use message ID to generate consistent colors
     const colorIndex = parseInt(message.id.replace(/\D/g, '')) % CARD_COLORS.length;
     const cardColor = CARD_COLORS[colorIndex];
@@ -172,10 +172,28 @@ const RecipeCardMessage = ({ message, onPress }: { message: any; onPress: () => 
             onPress={onPress}
         >
             <View style={styles.recipeCardRightModern}>
-                <CustomText style={styles.recipeTitleModern}>{message.recipe.name}</CustomText>
+                <View style={styles.recipeCardHeader}>
+                    <CustomText style={styles.recipeTitleModern}>{message.recipe.name}</CustomText>
+                    {onSave && (
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                onSave();
+                            }}
+                            style={styles.recipeSaveButton}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons 
+                                name={saved ? "checkmark-circle" : "bookmark-outline"} 
+                                size={22} 
+                                color={saved ? "#256D85" : "#9CA3AF"} 
+                            />
+                        </TouchableOpacity>
+                    )}
+                </View>
                 <CustomText style={styles.recipeDescriptionModern}>
                     {message.recipe.time || Array.isArray(message.recipe.ingredients) 
-                        ? `${message.recipe.time || 'Quick'}, ${Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients`
+                        ? `${message.recipe.time || 'Quick'} • ${Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients`
                         : 'Delicious recipe'}
                 </CustomText>
             </View>
@@ -235,48 +253,70 @@ export default function ChatScreen() {
 
     // Convert messages to display format
     const convertMessages = (rawMessages: any[]) => {
-        return rawMessages.map((msg, index) => {
+        const converted: any[] = [];
+        
+        rawMessages.forEach((msg, index) => {
             const maybeJson = extractJsonFromString(msg.content);
             
-            if (msg.role === 'assistant' && maybeJson && maybeJson.is_recipe) {
-                console.log('Converting recipe message:', {
+            if (msg.role === 'assistant' && maybeJson && maybeJson.is_recipe && maybeJson.recipes) {
+                console.log('Converting recipe message with recipes:', {
                     msg_id: msg.id,
                     saved_recipe_id: msg.saved_recipe_id,
+                    recipe_count: maybeJson.recipes.length,
                     content: msg.content
                 });
                 
-                return {
-                    id: msg.id || `recipe-${index}`,
-                    text: '[RECIPE_CARD]',
-                    createdAt: new Date(),
-                    role: 'assistant',
-                    recipe: maybeJson,
-                    saved_recipe_id: msg.saved_recipe_id,
-                };
+                // Add intro text if present
+                if (maybeJson.intro_text) {
+                    converted.push({
+                        id: `${msg.id}-intro`,
+                        text: maybeJson.intro_text,
+                        createdAt: new Date(msg.created_at || new Date()),
+                        role: 'assistant',
+                    });
+                }
+                
+                // Add each recipe as a separate display message
+                maybeJson.recipes.forEach((recipe: any, recipeIndex: number) => {
+                    converted.push({
+                        id: `${msg.id}-recipe-${recipeIndex}`,
+                        text: '[RECIPE_CARD]',
+                        createdAt: new Date(msg.created_at || new Date()),
+                        role: 'assistant',
+                        recipe: recipe,
+                        message_id: msg.id, // Keep reference to original message
+                        saved_recipe_id: msg.saved_recipe_id,
+                    });
+                });
             } else if (msg.role === 'assistant' && maybeJson && maybeJson.is_recipe === false) {
+                // Non-recipe response (conversational)
                 const text = maybeJson.text || maybeJson.message;
-                return {
+                converted.push({
                     id: msg.id || `ai-${index}`,
                     text: text || msg.content,
-                    createdAt: new Date(),
+                    createdAt: new Date(msg.created_at || new Date()),
                     role: 'assistant',
-                };
+                });
             } else if (msg.role === 'assistant') {
-                return {
+                // Plain text response
+                converted.push({
                     id: msg.id || `ai-${index}`,
                     text: msg.content,
-                    createdAt: new Date(),
+                    createdAt: new Date(msg.created_at || new Date()),
                     role: 'assistant',
-                };
+                });
             } else {
-                return {
+                // User message
+                converted.push({
                     id: msg.id || `user-${index}`,
                     text: msg.content,
-                    createdAt: new Date(),
+                    createdAt: new Date(msg.created_at || new Date()),
                     role: 'user',
-                };
+                });
             }
         });
+        
+        return converted;
     };
 
     // Fetch messages for this chat on mount and when returning to chat
@@ -392,6 +432,108 @@ export default function ChatScreen() {
         };
     }, [inputBottomOffset]);
 
+    const handleSuggestionPress = async (suggestionText: string) => {
+        if (!userId) return;
+        
+        const userMessage = suggestionText.trim();
+        setSending(true);
+        
+        // Immediately add user message to chat
+        setMessages(prev => [
+            ...prev,
+            { 
+                id: `user-${Date.now()}`,
+                text: userMessage,
+                createdAt: new Date(),
+                role: 'user'
+            }
+        ]);
+        
+        // Add typing indicator
+        setMessages(prev => [
+            ...prev,
+            { 
+                id: 'typing-indicator',
+                text: '[TYPING]',
+                createdAt: new Date(),
+                role: 'assistant',
+                isTyping: true
+            }
+        ]);
+        
+        try {
+            // If no chat yet, create one and send first message
+            const payload: any = {
+                user_id: userId,
+                message: userMessage,
+            };
+            if (currentChatId) {
+                payload.chat_id = currentChatId;
+            }
+            
+            const res = await fetch('https://familycooksclean.onrender.com/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            
+            const data = await res.json();
+            if (res.ok) {
+                // Update chat_id if new
+                if (!currentChatId && data.chat_id) {
+                    setCurrentChatId(data.chat_id);
+                }
+                
+                // Remove typing indicator and refresh messages from server to get the real message ID
+                setMessages(prev => {
+                    const withoutTyping = prev.filter(msg => !msg.isTyping);
+                    return withoutTyping;
+                });
+                
+                // Fetch the updated messages from server to get the real message ID
+                setTimeout(() => {
+                    const chatIdToUse = currentChatId || data.chat_id;
+                    if (chatIdToUse) {
+                        fetch(`https://familycooksclean.onrender.com/ai/messages?chat_id=${chatIdToUse}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                console.log('Refreshing messages after AI response:', data);
+                                const convertedMessages = convertMessages(data);
+                                console.log('Converted messages after AI response:', convertedMessages);
+                                setMessages(convertedMessages);
+                            })
+                            .catch(err => console.log('Error refreshing messages after AI response:', err));
+                    }
+                }, 100);
+                console.log('AI raw response:', data.ai_response);
+            } else {
+                setMessages(prev => {
+                    const withoutTyping = prev.filter(msg => !msg.isTyping);
+                    const errorMessage = {
+                        id: `error-${Date.now()}`,
+                        text: 'Sorry, I encountered an error. Please try again.',
+                        createdAt: new Date(),
+                        role: 'assistant',
+                    };
+                    return [...withoutTyping, errorMessage];
+                });
+            }
+        } catch (err) {
+            setMessages(prev => {
+                const withoutTyping = prev.filter(msg => !msg.isTyping);
+                const errorMessage = {
+                    id: `error-${Date.now()}`,
+                    text: 'Sorry, I encountered an error. Please try again.',
+                    createdAt: new Date(),
+                    role: 'assistant',
+                };
+                return [...withoutTyping, errorMessage];
+            });
+        } finally {
+            setSending(false);
+        }
+    };
+
     const sendMessage = async () => {
         if (!message.trim() || !userId) return;
         
@@ -496,8 +638,9 @@ export default function ChatScreen() {
 
     if (loading && messages.length === 0) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top', 'bottom']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.appBackground }} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#256D85" />
                     <CustomText style={styles.loadingText}>Loading chat...</CustomText>
                 </View>
             </SafeAreaView>
@@ -506,7 +649,7 @@ export default function ChatScreen() {
 
     if (!userId) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top', 'bottom']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: PALETTE.appBackground }} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
                     <CustomText style={styles.loadingText}>You must be logged in to chat with the AI Chef.</CustomText>
                 </View>
@@ -523,17 +666,17 @@ export default function ChatScreen() {
                     onPress={() => router.back()}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+                    <Ionicons name="arrow-back" size={24} color={PALETTE.headerText} />
                 </TouchableOpacity>
                 <View style={styles.headerTitleContainer}>
-                    <CustomText style={styles.headerTitle}>Recipe Assistant</CustomText>
-                    <CustomText style={styles.headerSubtitle}>AI Chef at your service</CustomText>
+                    <CustomText style={styles.headerTitle}>AI Chef Assistant</CustomText>
+                    <CustomText style={styles.headerSubtitle}>Ask me anything about recipes</CustomText>
                 </View>
                 <TouchableOpacity 
                     style={styles.headerMenuButton}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
+                    <Ionicons name="ellipsis-vertical" size={24} color={PALETTE.headerText} />
                 </TouchableOpacity>
             </View>
             
@@ -551,17 +694,50 @@ export default function ChatScreen() {
                             keyboardDismissMode="interactive"
                             automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
                         >
-                    {/* Show welcome message for new chats */}
+                    {/* Show welcome section for new chats */}
                     {messages.length === 0 && (
-                        <View style={[styles.messageRow, styles.aiRow, { marginTop: 8 }]}>
-                            <View style={styles.aiAvatarCircle}>
-                                <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
-                            </View>
-                            <View style={styles.aiMessageContainer}>
-                                <View style={styles.aiBubble}>
-                                    <CustomText style={styles.aiText}>Hi there! I'm your AI recipe assistant. Tell me what ingredients you have, dietary preferences, or what you're craving, and I'll help you create something delicious!</CustomText>
+                        <View style={styles.welcomeSection}>
+                            {/* Large icon */}
+                            <View style={styles.welcomeIconContainer}>
+                                <View style={styles.welcomeIconCircle}>
+                                    <Ionicons name="help-circle-outline" size={48} color="#256D85" />
                                 </View>
-                                <CustomText style={[styles.timestamp, styles.aiTimestamp]}>Just now</CustomText>
+                            </View>
+                            {/* Greeting */}
+                            <CustomText style={styles.welcomeTitle}>What's cooking today?</CustomText>
+                            <CustomText style={styles.welcomeSubtitle}>I'm here to help you create delicious meals with what you have!</CustomText>
+                            {/* Suggestion Buttons */}
+                            <View style={styles.suggestionButtonsContainer}>
+                                <TouchableOpacity 
+                                    style={[styles.suggestionButton, styles.suggestionButtonOrange]}
+                                    onPress={() => {
+                                        const suggestionText = 'Quick dinner ideas';
+                                        handleSuggestionPress(suggestionText);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <CustomText style={styles.suggestionButtonText}>Quick dinner ideas</CustomText>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={[styles.suggestionButton, styles.suggestionButtonGreen]}
+                                    onPress={() => {
+                                        const suggestionText = 'Healthy recipes';
+                                        handleSuggestionPress(suggestionText);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <CustomText style={styles.suggestionButtonText}>Healthy recipes</CustomText>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    style={[styles.suggestionButton, styles.suggestionButtonPurple]}
+                                    onPress={() => {
+                                        const suggestionText = 'Dessert time';
+                                        handleSuggestionPress(suggestionText);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <CustomText style={styles.suggestionButtonText}>Dessert time</CustomText>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     )}
@@ -576,21 +752,28 @@ export default function ChatScreen() {
                             return <AITypingIndicator key={msg.id} />;
                         }
                         
-                        // Render recipe card
+                        // Render recipe card(s)
                         if (msg.text === '[RECIPE_CARD]' && msg.recipe) {
+                            // Check if previous message is also a recipe card (for grouping)
+                            const prevIsRecipeCard = prevMsg && prevMsg.text === '[RECIPE_CARD]';
+                            const shouldShowAvatar = !prevIsRecipeCard; // Show avatar only if previous message is not a recipe card
+                            
                             return (
-                                <View key={msg.id} style={[styles.messageRow, styles.aiRow, !isGrouped && { marginTop: 18 }]}> 
-                                    {!isGrouped && (
+                                <View key={msg.id} style={[styles.messageRow, styles.aiRow, idx === 0 || !prevIsRecipeCard ? { marginTop: 18 } : { marginTop: 12 }]}> 
+                                    {shouldShowAvatar && (
                                         <View style={styles.aiAvatarCircle}>
-                                            <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                                            <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
                                         </View>
+                                    )}
+                                    {!shouldShowAvatar && (
+                                        <View style={{ width: 36, marginRight: 12 }} /> // Spacer to align with other messages
                                     )}
                                     <View style={styles.aiMessageContainer}>
                                         <RecipeCardMessage 
                                             message={msg}
                                             onPress={() => {
                                             console.log('Recipe card pressed:', {
-                                                message_id: msg.id,
+                                                message_id: msg.message_id || msg.id,
                                                 saved_recipe_id: msg.saved_recipe_id,
                                                 recipe: msg.recipe
                                             });
@@ -601,7 +784,7 @@ export default function ChatScreen() {
                                                     pathname: '/recipe-detail', 
                                                     params: { 
                                                         id: msg.saved_recipe_id, 
-                                                        message_id: msg.id, 
+                                                        message_id: msg.message_id || msg.id, 
                                                         saved_recipe_id: msg.saved_recipe_id,
                                                         isAI: '1'
                                                     } 
@@ -612,16 +795,63 @@ export default function ChatScreen() {
                                                     ...msg.recipe,
                                                     title: msg.recipe.name,
                                                     isAI: '1',
-                                                    tags: JSON.stringify(msg.recipe.tags),
-                                                    ingredients: JSON.stringify(msg.recipe.ingredients),
-                                                    steps: JSON.stringify(msg.recipe.steps),
-                                                    message_id: msg.id,
+                                                    tags: JSON.stringify(msg.recipe.tags || []),
+                                                    ingredients: JSON.stringify(msg.recipe.ingredients || []),
+                                                    steps: JSON.stringify(msg.recipe.steps || []),
+                                                    message_id: msg.message_id || msg.id,
                                                 };
                                                 router.push({ pathname: '/recipe-detail', params });
                                             }
                                         }}
+                                        onSave={async () => {
+                                            if (!userId || msg.saved_recipe_id) return; // Already saved
+                                            
+                                            try {
+                                                // Save recipe to user's collection
+                                                const saveRes = await fetch('https://familycooksclean.onrender.com/recipes/add', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        user_id: userId,
+                                                        title: msg.recipe.name,
+                                                        time: msg.recipe.time,
+                                                        tags: msg.recipe.tags || [],
+                                                        ingredients: msg.recipe.ingredients || [],
+                                                        steps: msg.recipe.steps || []
+                                                    }),
+                                                });
+                                                
+                                                if (!saveRes.ok) throw new Error('Failed to save recipe');
+                                                
+                                                const savedRecipe = await saveRes.json();
+                                                
+                                                // Update the message with the saved recipe ID if we have message_id
+                                                if (msg.message_id) {
+                                                    await fetch('https://familycooksclean.onrender.com/recipes/save-message-recipe', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            message_id: msg.message_id,
+                                                            saved_recipe_id: savedRecipe.id
+                                                        }),
+                                                    });
+                                                }
+                                                
+                                                // Update local state
+                                                setMessages(prev => prev.map(m => 
+                                                    m.id === msg.id 
+                                                        ? { ...m, saved_recipe_id: savedRecipe.id }
+                                                        : m
+                                                ));
+                                            } catch (err) {
+                                                console.error('Failed to save recipe:', err);
+                                            }
+                                        }}
+                                        saved={!!msg.saved_recipe_id}
                                         />
-                                        <CustomText style={[styles.timestamp, styles.aiTimestamp]}>{timestamp}</CustomText>
+                                        {(idx === messages.length - 1 || (idx < messages.length - 1 && messages[idx + 1].text !== '[RECIPE_CARD]' && messages[idx + 1].role !== 'assistant')) && (
+                                            <CustomText style={[styles.timestamp, styles.aiTimestamp]}>{timestamp}</CustomText>
+                                        )}
                                     </View>
                                 </View>
                             );
@@ -633,7 +863,7 @@ export default function ChatScreen() {
                                 <View key={msg.id} style={[styles.messageRow, styles.aiRow, !isGrouped && { marginTop: 18 }]}> 
                                     {!isGrouped && (
                                         <View style={styles.aiAvatarCircle}>
-                                            <Ionicons name="restaurant-outline" size={16} color="#FFFFFF" />
+                                            <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
                                         </View>
                                     )}
                                     <View style={styles.aiMessageContainer}>
@@ -686,11 +916,41 @@ export default function ChatScreen() {
                 ]}
             >
                 <View style={styles.inputContainer}>
+                    {/* Suggestion Chips */}
+                    <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.suggestionChipsContainer}
+                        contentContainerStyle={styles.suggestionChipsContent}
+                    >
+                        <TouchableOpacity 
+                            style={styles.suggestionChip}
+                            onPress={() => setMessage('Vegetarian options')}
+                            activeOpacity={0.7}
+                        >
+                            <CustomText style={styles.suggestionChipText}>Vegetarian options</CustomText>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.suggestionChip}
+                            onPress={() => setMessage('30-min meals')}
+                            activeOpacity={0.7}
+                        >
+                            <CustomText style={styles.suggestionChipText}>30-min meals</CustomText>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.suggestionChip}
+                            onPress={() => setMessage('Low carb')}
+                            activeOpacity={0.7}
+                        >
+                            <CustomText style={styles.suggestionChipText}>Low carb</CustomText>
+                        </TouchableOpacity>
+                    </ScrollView>
+                    
                     {/* Input Box */}
                     <View style={styles.inputBox}>
                         <TextInput
                             style={styles.textInput}
-                            placeholder="Ask for a recipe..."
+                            placeholder="Ask me anything about recipes..."
                             placeholderTextColor="#9CA3AF"
                             value={message}
                             onChangeText={setMessage}
@@ -739,12 +999,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: 'transparent',
-        elevation: 0,
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 3,
         zIndex: 10,
         paddingTop: Platform.OS === 'ios' ? 48 : 32,
         paddingBottom: 20,
         paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
     },
     headerBackButton: {
         width: 40,
@@ -758,18 +1023,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '800',
+        fontSize: 20,
+        fontWeight: '700',
         color: PALETTE.headerText,
         textAlign: 'center',
-        letterSpacing: -0.5,
+        letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 14,
-        color: PALETTE.headerText,
+        fontSize: 13,
+        color: '#6B7280',
         textAlign: 'center',
-        marginTop: 2,
-        opacity: 0.9,
+        marginTop: 4,
         fontWeight: '500',
     },
     headerMenuButton: {
@@ -810,30 +1074,40 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     aiAvatarCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: PALETTE.header,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#256D85',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
         marginTop: 2,
+        shadowColor: '#256D85',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     userAvatarCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: PALETTE.header,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#256D85',
         justifyContent: 'center',
         alignItems: 'center',
-        marginLeft: 10,
+        marginLeft: 12,
         marginTop: 2,
         overflow: 'hidden',
+        shadowColor: '#256D85',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     userAvatarImage: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
     },
     aiMessageContainer: {
         flex: 1,
@@ -846,27 +1120,37 @@ const styles = StyleSheet.create({
     },
     aiBubble: {
         backgroundColor: PALETTE.aiBubble,
-        borderRadius: 18,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        borderRadius: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         shadowColor: 'rgba(0, 0, 0, 0.06)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
         shadowRadius: 8,
         elevation: 2,
         borderWidth: 1,
-        borderColor: PALETTE.aiBorder,
+        borderColor: '#F3F4F6',
+    },
+    welcomeBubble: {
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#FFFFFF',
+    },
+    welcomeText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#374151',
     },
     userBubble: {
         backgroundColor: PALETTE.userBubble,
-        borderRadius: 18,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        shadowColor: 'rgba(37, 109, 133, 0.2)',
+        borderRadius: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        shadowColor: 'rgba(37, 109, 133, 0.25)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
         shadowRadius: 8,
-        elevation: 2,
+        elevation: 3,
     },
     aiBubbleTail: {
         borderBottomLeftRadius: 4,
@@ -938,15 +1222,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: PALETTE.inputBackground,
         borderRadius: 24,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
         borderWidth: 1,
         borderColor: PALETTE.inputBorder,
         shadowColor: PALETTE.inputShadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
     },
     inputIconButton: {
         width: 36,
@@ -973,6 +1257,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 8,
+        shadowColor: PALETTE.sendEnabled,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
     },
     sendButtonDisabled: {
         backgroundColor: PALETTE.sendDisabled,
@@ -983,40 +1272,54 @@ const styles = StyleSheet.create({
     recipeCardModern: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 16,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-        marginBottom: 10,
-        shadowColor: 'rgba(0, 0, 0, 0.06)',
-        shadowOffset: { width: 0, height: 2 },
+        borderRadius: 20,
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+        marginBottom: 12,
+        shadowColor: 'rgba(0, 0, 0, 0.08)',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 1,
-        shadowRadius: 8,
-        elevation: 2,
+        shadowRadius: 12,
+        elevation: 3,
         borderWidth: 1,
+        borderColor: '#F3F4F6',
         maxWidth: SCREEN_WIDTH * 0.75,
+        backgroundColor: '#FFFFFF',
     },
     recipeCardRightModern: {
         flex: 1,
         justifyContent: 'center',
         minWidth: 0,
     },
+    recipeCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
     recipeTitleModern: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '700',
         color: '#1F2937',
         textAlign: 'left',
-        marginBottom: 4,
+        flex: 1,
+        marginRight: 8,
+        letterSpacing: -0.3,
+    },
+    recipeSaveButton: {
+        padding: 4,
+        marginTop: -4,
     },
     recipeDescriptionModern: {
-        fontSize: 13,
+        fontSize: 14,
         color: '#6B7280',
-        fontWeight: '400',
+        fontWeight: '500',
         textAlign: 'left',
-        lineHeight: 18,
-        marginBottom: 10,
+        lineHeight: 20,
+        marginBottom: 0,
         flexShrink: 1,
         maxWidth: '100%',
-        letterSpacing: -0.2,
+        letterSpacing: -0.1,
     },
     metaPillWrapperModern: {
         width: '100%',
@@ -1064,11 +1367,11 @@ const styles = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 17,
-        backgroundColor: PALETTE.header,
+        backgroundColor: '#256D85',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
-        shadowColor: 'rgba(62,140,109,0.4)',
+        shadowColor: 'rgba(37, 109, 133, 0.25)',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.28,
         shadowRadius: 8,
@@ -1104,7 +1407,7 @@ const styles = StyleSheet.create({
         marginRight: 6,
     },
     typingProgressDotActive: {
-        backgroundColor: PALETTE.header,
+        backgroundColor: '#256D85',
         width: 10,
         height: 10,
         borderRadius: 5,
@@ -1143,53 +1446,95 @@ const styles = StyleSheet.create({
         marginRight: 8,
         flex: 0.3,
     },
-    // Welcome message styles
-    welcomeContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
+    // Welcome section styles
+    welcomeSection: {
+        alignItems: 'center',
+        paddingVertical: 32,
+        paddingHorizontal: 24,
+    },
+    welcomeIconContainer: {
         marginBottom: 24,
-        marginTop: 8,
     },
-    welcomeAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        marginRight: 12,
-        backgroundColor: '#D9F1E5',
-    },
-    welcomeBubble: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 20,
-        flex: 1,
-        shadowColor: 'rgba(15, 23, 42, 0.08)',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 4,
-        maxWidth: SCREEN_WIDTH * 0.85,
+    welcomeIconCircle: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        backgroundColor: '#E5F3EC',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#D1E6DA',
     },
     welcomeTitle: {
-        color: '#1F2533',
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#1F2937',
+        textAlign: 'center',
         marginBottom: 12,
+        letterSpacing: -0.5,
+    },
+    welcomeSubtitle: {
+        fontSize: 16,
+        color: '#6B7280',
+        textAlign: 'center',
+        marginBottom: 32,
+        paddingHorizontal: 24,
         lineHeight: 24,
+        fontWeight: '500',
     },
-    welcomeText: {
-        color: '#536072',
+    suggestionButtonsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: 12,
+        width: '100%',
+        paddingHorizontal: 20,
+    },
+    suggestionButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24,
+        minWidth: 120,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    suggestionButtonOrange: {
+        backgroundColor: '#FF6B6B',
+    },
+    suggestionButtonGreen: {
+        backgroundColor: '#4ECDC4',
+    },
+    suggestionButtonPurple: {
+        backgroundColor: '#A78BFA',
+    },
+    suggestionButtonText: {
         fontSize: 15,
-        lineHeight: 22,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    suggestionChipsContainer: {
         marginBottom: 12,
     },
-    welcomeList: {
-        marginBottom: 12,
+    suggestionChipsContent: {
+        paddingHorizontal: 4,
+        gap: 8,
     },
-    welcomeListItem: {
-        color: '#536072',
+    suggestionChip: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginRight: 8,
+    },
+    suggestionChipText: {
         fontSize: 14,
-        lineHeight: 20,
-        marginBottom: 6,
-        paddingLeft: 4,
+        color: '#4B5563',
+        fontWeight: '600',
     },
 }); 
