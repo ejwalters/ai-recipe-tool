@@ -664,7 +664,7 @@ async function generateChatSummary(messages) {
             if (typeof content === 'string') {
                 const parsed = JSON.parse(content);
                 if (parsed && parsed.is_recipe && parsed.recipes && Array.isArray(parsed.recipes)) {
-                    parsed.recipes.forEach((recipe: any) => {
+                    parsed.recipes.forEach((recipe) => {
                         if (recipe.name && !recipeNames.includes(recipe.name)) {
                             recipeNames.push(recipe.name);
                         }
