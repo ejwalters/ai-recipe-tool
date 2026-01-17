@@ -947,28 +947,31 @@ export default function SocialScreen() {
           </View>
         )}
 
-        <View style={styles.segmentContainer}>
-          {SEGMENTS.map((segment, index) => {
-            const isActive = segment.id === activeSegment;
-            return (
-              <TouchableOpacity
-                key={segment.id}
-                style={[
-                  styles.segmentButton,
-                  isActive && styles.segmentButtonActive,
-                ]}
-                onPress={() => setActiveSegment(segment.id)}
-                activeOpacity={0.85}
-              >
-                <CustomText
-                  style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}
+        {/* Hide segments when search is active */}
+        {!showSearch && (
+          <View style={styles.segmentContainer}>
+            {SEGMENTS.map((segment, index) => {
+              const isActive = segment.id === activeSegment;
+              return (
+                <TouchableOpacity
+                  key={segment.id}
+                  style={[
+                    styles.segmentButton,
+                    isActive && styles.segmentButtonActive,
+                  ]}
+                  onPress={() => setActiveSegment(segment.id)}
+                  activeOpacity={0.85}
                 >
-                  {segment.label}
-                </CustomText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  <CustomText
+                    style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}
+                  >
+                    {segment.label}
+                  </CustomText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {showSearch ? (
