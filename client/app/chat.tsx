@@ -46,7 +46,97 @@ const TYPING_STEPS = [
     },
 ];
 
-// AI Typing Indicator Component
+// Helper function to detect if message is a recipe request
+// Defaults to recipe animation (true) unless it's VERY clearly a follow-up question
+// This is safer since we can't know the AI's response until after it's generated
+const isRecipeRequest = (message: string, previousMessages?: any[]): boolean => {
+    const lowerMessage = message.toLowerCase().trim();
+    
+    // Very strict patterns - only use simple animation for questions that are DEFINITELY not recipe requests
+    // These are questions about concepts, substitutions, temperatures, or times that don't mention cooking
+    const definitelyNotRecipePatterns = [
+        /^what is [a-z]+ \?*$/i, // "what is X?" without cooking context
+        /^how does [a-z]+ work \?*$/i, // "how does X work?"
+        /^why [a-z]+ \?*$/i, // "why X?"
+        /^tell me about [a-z]+(?!.*recipe|.*cook|.*make)/i, // "tell me about X" without cooking context
+    ];
+    
+    // Check for substitution/temperature/time questions that don't mention cooking
+    const isTechnicalQuestion = (
+        /\b(substitute|replace|instead of|alternative for)\b/i.test(lowerMessage) ||
+        /\b(temperature|how hot|how cold|\d+ degrees?)\b/i.test(lowerMessage) ||
+        /\b(how long|how much time|how many minutes?)\b/i.test(lowerMessage)
+    ) && !/\b(recipe|make|cook|bake|dish|meal|prepare|ingredient|food|oven|stove)\b/i.test(lowerMessage);
+    
+    // Only use simple animation if it matches a "definitely not recipe" pattern
+    if (definitelyNotRecipePatterns.some(pattern => pattern.test(lowerMessage)) || isTechnicalQuestion) {
+        return false; // Use simple conversational animation
+    }
+    
+    // Default to recipe animation for everything else
+    // This includes: ingredient names ("chia seed pudding"), recipe requests, cooking questions, etc.
+    return true;
+};
+
+// Simple Conversational Typing Indicator
+const ConversationalTypingIndicator = () => {
+    const dot1 = useRef(new Animated.Value(0.3)).current;
+    const dot2 = useRef(new Animated.Value(0.3)).current;
+    const dot3 = useRef(new Animated.Value(0.3)).current;
+
+    useEffect(() => {
+        const animateDot = (dot: Animated.Value, delay: number) => {
+            return Animated.loop(
+                Animated.sequence([
+                    Animated.delay(delay),
+                    Animated.timing(dot, {
+                        toValue: 1,
+                        duration: 400,
+                        easing: Easing.ease,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(dot, {
+                        toValue: 0.3,
+                        duration: 400,
+                        easing: Easing.ease,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+        };
+
+        const anim1 = animateDot(dot1, 0);
+        const anim2 = animateDot(dot2, 200);
+        const anim3 = animateDot(dot3, 400);
+
+        anim1.start();
+        anim2.start();
+        anim3.start();
+
+        return () => {
+            anim1.stop();
+            anim2.stop();
+            anim3.stop();
+        };
+    }, [dot1, dot2, dot3]);
+
+    return (
+        <View style={[styles.messageRow, styles.aiRow, { marginTop: 18 }]}>
+            <View style={styles.aiAvatarCircle}>
+                <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.aiMessageContainer}>
+                <View style={styles.conversationalTypingBubble}>
+                    <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
+                    <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
+                    <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+                </View>
+            </View>
+        </View>
+    );
+};
+
+// AI Recipe Typing Indicator Component (with full animation)
 const AITypingIndicator = () => {
     const rotation = useRef(new Animated.Value(0)).current;
     const fade = useRef(new Animated.Value(1)).current;
@@ -439,27 +529,33 @@ export default function ChatScreen() {
         setSending(true);
         
         // Immediately add user message to chat
-        setMessages(prev => [
-            ...prev,
-            { 
-                id: `user-${Date.now()}`,
-                text: userMessage,
-                createdAt: new Date(),
-                role: 'user'
-            }
-        ]);
-        
-        // Add typing indicator
-        setMessages(prev => [
-            ...prev,
-            { 
+        setMessages(prev => {
+            const updatedMessages = [
+                ...prev,
+                { 
+                    id: `user-${Date.now()}`,
+                    text: userMessage,
+                    createdAt: new Date(),
+                    role: 'user'
+                }
+            ];
+            
+            // Detect if this is a recipe request or conversational follow-up
+            // Pass previous messages for context
+            const isRecipe = isRecipeRequest(userMessage, prev);
+            
+            // Add typing indicator with type
+            updatedMessages.push({ 
                 id: 'typing-indicator',
                 text: '[TYPING]',
                 createdAt: new Date(),
                 role: 'assistant',
-                isTyping: true
-            }
-        ]);
+                isTyping: true,
+                typingType: isRecipe ? 'recipe' : 'conversational'
+            });
+            
+            return updatedMessages;
+        });
         
         try {
             // If no chat yet, create one and send first message
@@ -552,7 +648,10 @@ export default function ChatScreen() {
             }
         ]);
         
-        // Add typing indicator
+        // Detect if this is a recipe request or conversational follow-up
+        const isRecipe = isRecipeRequest(userMessage);
+        
+        // Add typing indicator with type
         setMessages(prev => [
             ...prev,
             { 
@@ -560,7 +659,8 @@ export default function ChatScreen() {
                 text: '[TYPING]',
                 createdAt: new Date(),
                 role: 'assistant',
-                isTyping: true
+                isTyping: true,
+                typingType: isRecipe ? 'recipe' : 'conversational'
             }
         ]);
         
@@ -749,7 +849,11 @@ export default function ChatScreen() {
                         
                         // Render typing indicator
                         if (msg.isTyping) {
-                            return <AITypingIndicator key={msg.id} />;
+                            if (msg.typingType === 'recipe') {
+                                return <AITypingIndicator key={msg.id} />;
+                            } else {
+                                return <ConversationalTypingIndicator key={msg.id} />;
+                            }
                         }
                         
                         // Render recipe card(s)
@@ -1445,6 +1549,31 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(220, 228, 240, 0.85)',
         marginRight: 8,
         flex: 0.3,
+    },
+    // Conversational typing indicator styles
+    conversationalTypingBubble: {
+        backgroundColor: PALETTE.aiBubble,
+        borderRadius: 20,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        minWidth: 60,
+        shadowColor: 'rgba(0, 0, 0, 0.06)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    typingDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#9CA3AF',
     },
     // Welcome section styles
     welcomeSection: {
