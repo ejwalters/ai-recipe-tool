@@ -248,36 +248,52 @@ export default function ChefScreen() {
         };
     };
 
-    // Extract recipe title from summary if it exists
+    // Extract title and description from summary (format: "TITLE|DESCRIPTION")
     const getChatTitle = (summary: string | undefined) => {
         if (!summary) return 'Chat Conversation';
-        // Try to extract recipe name if summary contains one
-        const recipeMatch = summary.match(/(?:recipe|for|make)\s+([A-Z][a-zA-Z\s&]+?)(?:\.|$|,|:)/i);
-        if (recipeMatch && recipeMatch[1]) {
-            return recipeMatch[1].trim();
+        
+        // Check if summary uses the pipe format (TITLE|DESCRIPTION)
+        if (summary.includes('|')) {
+            const [title] = summary.split('|');
+            return title.trim() || 'Chat Conversation';
         }
-        // If summary starts with a capitalized word, use first few words
+        
+        // Fallback for old format summaries: use first part
         const words = summary.split(' ');
         if (words[0] && words[0][0] === words[0][0].toUpperCase() && words[0].length > 3) {
             const title = words.slice(0, 3).join(' ');
-            return title.length > 40 ? title.substring(0, 40) + '...' : title;
+            return title.length > 30 ? title.substring(0, 27) + '...' : title;
         }
-        // Fallback: first 30 chars
-        return summary.substring(0, 40) + (summary.length > 40 ? '...' : '');
+        
+        // Final fallback: first 30 chars
+        return summary.substring(0, 30) + (summary.length > 30 ? '...' : '');
     };
 
-    // Get description from summary
+    // Get description from summary (format: "TITLE|DESCRIPTION")
     const getChatDescription = (summary: string | undefined) => {
         if (!summary) return 'Start a conversation with AI Chef';
-        // Remove the title part if it's at the start
+        
+        // Check if summary uses the pipe format (TITLE|DESCRIPTION)
+        if (summary.includes('|')) {
+            const parts = summary.split('|');
+            const description = parts.length > 1 ? parts[1] : parts[0];
+            const desc = description.trim();
+            return desc.substring(0, 70) + (desc.length > 70 ? '...' : '');
+        }
+        
+        // Fallback for old format: remove title part if detected
         const title = getChatTitle(summary);
         if (summary.startsWith(title)) {
             const desc = summary.substring(title.length).trim();
-            if (desc.length > 0) {
-                return desc.substring(0, 80) + (desc.length > 80 ? '...' : '');
+            // Skip common separators
+            const cleanedDesc = desc.replace(/^[,\-\s:]+/, '').trim();
+            if (cleanedDesc.length > 0) {
+                return cleanedDesc.substring(0, 70) + (cleanedDesc.length > 70 ? '...' : '');
             }
         }
-        return summary.substring(0, 80) + (summary.length > 80 ? '...' : '');
+        
+        // Final fallback: use summary as description
+        return summary.substring(0, 70) + (summary.length > 70 ? '...' : '');
     };
 
     // Chef Loading Skeleton Component

@@ -638,20 +638,90 @@ Please modify this recipe according to the user's request and return the modifie
 });
 
 async function generateChatSummary(messages) {
-    const prompt = `
-Summarize the following conversation in a few keywords for a chat history list. Focus on the main topic, recipe, or user request. If the chat is mostly casual or contains no recipe, summarize the general theme.
+    // Extract user's first message to understand the initial request
+    const firstUserMessage = messages.find(m => m.role === 'user');
+    const firstMessageText = firstUserMessage ? firstUserMessage.content.substring(0, 100) : '';
+    
+    // Count recipe mentions
+    const recipeCount = messages.filter(m => {
+        try {
+            const content = m.content;
+            if (typeof content === 'string') {
+                const parsed = JSON.parse(content);
+                return parsed && parsed.is_recipe && parsed.recipes;
+            }
+        } catch (e) {
+            // Not JSON, skip
+        }
+        return false;
+    }).length;
 
-${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
-    `;
-    const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-            { role: 'system', content: prompt }
-        ],
-        max_tokens: 60,
-        temperature: 0.7,
-    });
-    return completion.choices[0].message.content.trim();
+    const prompt = `
+You are creating a concise, user-friendly summary for a chat history list. The user had a conversation with an AI chef assistant.
+
+FIRST USER MESSAGE: "${firstMessageText}"
+
+CONVERSATION LENGTH: ${messages.length} messages
+RECIPE COUNT: ${recipeCount > 0 ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} provided` : 'No recipes'}
+
+Create a summary with TWO parts separated by a pipe character (|):
+1. TITLE (max 30 characters): A short, descriptive title that captures the main topic. Examples: "Quick Dinner Ideas", "Healthy Breakfast Recipes", "Cooking Tips", "Chicken Stir-Fry", "Vegan Meal Plan"
+2. DESCRIPTION (max 70 characters): A brief, readable description of what was discussed or provided. Be specific but concise. Examples: "3 quick dinner recipes with chicken and pasta", "Breakfast ideas with eggs and toast", "Tips for cooking pasta perfectly", "Vegetarian stir-fry with tofu and vegetables"
+
+IMPORTANT:
+- Do NOT just list recipe names with "recipe" after each (avoid: "Pasta recipe, Chicken recipe, ...")
+- Do NOT use repetitive titles if multiple chats have similar topics
+- Use natural, conversational language
+- If multiple recipes were provided, mention the count and type (e.g., "3 Italian dinner recipes")
+- If it was a follow-up conversation with variations, note that (e.g., "Modified recipes with peanut butter")
+- Keep it scannable and useful for quickly identifying what the chat was about
+
+Format your response as: TITLE|DESCRIPTION
+
+Example responses:
+- "Quick Dinner Ideas|3 fast pasta and chicken recipes under 30 min"
+- "Healthy Breakfast|Vegan oatmeal and smoothie bowl options"
+- "Cooking Tips|How to cook pasta and substitute ingredients"
+- "Rice Pudding Variations|Elaborate peanut butter and vegan versions"
+`;
+    
+    try {
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4',
+            messages: [
+                { role: 'system', content: prompt }
+            ],
+            max_tokens: 100,
+            temperature: 0.5, // Lower temperature for more consistent summaries
+        });
+        
+        const result = completion.choices[0].message.content.trim();
+        
+        // Validate format: should contain a pipe separator
+        if (result.includes('|')) {
+            return result;
+        } else {
+            // Fallback: if format is wrong, try to create a reasonable summary
+            // Use first user message or create a generic title
+            const fallbackTitle = firstMessageText.length > 0 
+                ? firstMessageText.substring(0, 30).replace(/[^\w\s]/g, '').trim()
+                : 'Chat Conversation';
+            const fallbackDesc = recipeCount > 0 
+                ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} discussed`
+                : 'Conversation with AI Chef';
+            return `${fallbackTitle}|${fallbackDesc}`;
+        }
+    } catch (err) {
+        console.error('Error generating chat summary:', err);
+        // Return a basic fallback summary
+        const fallbackTitle = firstMessageText.length > 0 
+            ? firstMessageText.substring(0, 30).replace(/[^\w\s]/g, '').trim() || 'Chat Conversation'
+            : 'Chat Conversation';
+        const fallbackDesc = recipeCount > 0 
+            ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} discussed`
+            : 'Conversation with AI Chef';
+        return `${fallbackTitle}|${fallbackDesc}`;
+    }
 }
 
 module.exports = router;
