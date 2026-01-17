@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import { socialService } from '../../lib/socialService';
 import { supabase } from '../../lib/supabase';
-import { getRecipeIconConfig, getDifficultyLevel } from '../../utils/recipeIcons';
+import { getRecipeIconConfig } from '../../utils/recipeIcons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type FeedItem = {
@@ -640,16 +640,24 @@ export default function SocialScreen() {
       const tags = Array.isArray(item.tags) ? item.tags : [];
       const ingredients = Array.isArray(item.ingredients) ? item.ingredients : [];
       const iconConfig = getRecipeIconConfig(item.title || '', tags, index, item);
-      const difficulty = getDifficultyLevel(item);
+      
+      const handleCardPress = () => {
+        router.push({ pathname: '/recipe-detail', params: { id: item.id } });
+      };
       
       return (
-        <View style={styles.feedCard}>
+        <TouchableOpacity 
+          style={styles.feedCard}
+          activeOpacity={0.88}
+          onPress={handleCardPress}
+        >
           {/* Author Header */}
           <View style={styles.feedCardHeader}>
             <TouchableOpacity
               style={styles.authorBadge}
               activeOpacity={0.85}
-              onPress={() => {
+              onPress={(e) => {
+                e.stopPropagation();
                 if (item.author?.id) {
                   router.push({ pathname: '/user-profile', params: { user_id: item.author.id } });
                 }
@@ -668,15 +676,24 @@ export default function SocialScreen() {
             <TouchableOpacity
               style={styles.moreButton}
               activeOpacity={0.7}
-              onPress={() => {}}
+              onPress={(e) => {
+                e.stopPropagation();
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="ellipsis-horizontal" size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
 
-          {/* Recipe Icon Display */}
-          <View style={[styles.recipeIconDisplay, { backgroundColor: iconConfig.backgroundColor }]}>
+          {/* Recipe Icon Display - Clickable */}
+          <TouchableOpacity
+            style={[styles.recipeIconDisplay, { backgroundColor: iconConfig.backgroundColor }]}
+            activeOpacity={0.85}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleCardPress();
+            }}
+          >
             {iconConfig.library === 'MaterialCommunityIcons' ? (
               <MaterialCommunityIcons 
                 name={iconConfig.name as any} 
@@ -690,7 +707,7 @@ export default function SocialScreen() {
                 color={iconConfig.iconColor} 
               />
             )}
-          </View>
+          </TouchableOpacity>
 
           {/* Recipe Title */}
           <CustomText style={styles.feedCardTitle} numberOfLines={2}>
@@ -709,16 +726,10 @@ export default function SocialScreen() {
               <View style={styles.feedMetricItem}>
                 <Ionicons name="list-outline" size={16} color="#F59E0B" />
                 <CustomText style={styles.feedMetricText}>
-                  {ingredients.length} {ingredients.length === 1 ? 'ing' : 'ing'}
+                  {ingredients.length} {ingredients.length === 1 ? 'ingredient' : 'ingredients'}
                 </CustomText>
               </View>
             )}
-            <View style={styles.feedMetricItem}>
-              <Ionicons name="trending-up-outline" size={16} color="#10B981" />
-              <CustomText style={[styles.feedMetricText, { color: difficulty.color }]}>
-                {difficulty.text}
-              </CustomText>
-            </View>
           </View>
 
           {/* Tags */}
@@ -788,12 +799,15 @@ export default function SocialScreen() {
             <TouchableOpacity
               style={styles.cookThisButton}
               activeOpacity={0.85}
-              onPress={() => router.push({ pathname: '/recipe-detail', params: { id: item.id } })}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleCardPress();
+              }}
             >
               <CustomText style={styles.cookThisButtonText}>Cook This</CustomText>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       );
     },
     [router, handleFeedFavoriteToggle, handleFeedSaveToggle]
