@@ -268,17 +268,8 @@ IMPORTANT:
                 }
             });
 
-            // 8. Generate summary (only if no recipes, or as fallback)
-            let summary = '';
-            if (recipes.length === 0) {
-                summary = await generateChatSummary(allMessages);
-            } else {
-                // Create a simple title from first user message or recipe count
-                const firstUserMessage = allMessages.find(m => m.role === 'user');
-                const firstMessageText = firstUserMessage ? firstUserMessage.content.substring(0, 30) : '';
-                const title = firstMessageText || `${recipes.length} Recipe${recipes.length > 1 ? 's' : ''}`;
-                summary = `${title}|${recipes.length} recipe${recipes.length > 1 ? 's' : ''} generated`;
-            }
+            // 8. Generate summary using AI for better quality (works for both with and without recipes)
+            let summary = await generateChatSummary(allMessages, recipes);
 
             // 9. Update the chats table with summary and recipes
             await supabase
@@ -673,10 +664,10 @@ Please modify this recipe according to the user's request and return the modifie
     }
 });
 
-async function generateChatSummary(messages) {
+async function generateChatSummary(messages, extractedRecipes = []) {
     // Extract user's first message to understand the initial request
     const firstUserMessage = messages.find(m => m.role === 'user');
-    const firstMessageText = firstUserMessage ? firstUserMessage.content.substring(0, 100) : '';
+    const firstMessageText = firstUserMessage ? firstUserMessage.content.substring(0, 120) : '';
     
     // Count recipe mentions
     const recipeCount = messages.filter(m => {
@@ -692,71 +683,80 @@ async function generateChatSummary(messages) {
         return false;
     }).length;
 
-    // Extract recipe names from messages for context
-    const recipeNames = [];
-    messages.forEach(m => {
-        try {
-            const content = m.content;
-            if (typeof content === 'string') {
-                const parsed = JSON.parse(content);
-                if (parsed && parsed.is_recipe && parsed.recipes && Array.isArray(parsed.recipes)) {
-                    parsed.recipes.forEach((recipe) => {
-                        if (recipe.name && !recipeNames.includes(recipe.name)) {
-                            recipeNames.push(recipe.name);
-                        }
-                    });
+    // Use extracted recipes if provided, otherwise extract from messages
+    let recipeNames = [];
+    if (extractedRecipes && extractedRecipes.length > 0) {
+        recipeNames = extractedRecipes.map(r => r.name).filter(Boolean);
+    } else {
+        messages.forEach(m => {
+            try {
+                const content = m.content;
+                if (typeof content === 'string') {
+                    const parsed = JSON.parse(content);
+                    if (parsed && parsed.is_recipe && parsed.recipes && Array.isArray(parsed.recipes)) {
+                        parsed.recipes.forEach((recipe) => {
+                            if (recipe.name && !recipeNames.includes(recipe.name)) {
+                                recipeNames.push(recipe.name);
+                            }
+                        });
+                    }
                 }
+            } catch (e) {
+                // Not JSON, skip
             }
-        } catch (e) {
-            // Not JSON, skip
-        }
-    });
+        });
+    }
+    
+    // Extract key words from first message for title inspiration
+    const firstWords = firstMessageText.toLowerCase().split(/\s+/).slice(0, 6).join(' ');
     
     const recipeContext = recipeNames.length > 0 
-        ? `Recipes discussed: ${recipeNames.slice(0, 3).join(', ')}${recipeNames.length > 3 ? '...' : ''}`
-        : 'No specific recipes provided';
+        ? `Recipes generated: ${recipeNames.slice(0, 4).join(', ')}${recipeNames.length > 4 ? '...' : ''}`
+        : 'No recipes generated';
 
     const prompt = `
-You are creating a clear, scannable summary for a chat history card. The user had a conversation with an AI chef assistant.
+You are creating a concise, complete summary for a chat history card. The user had a conversation with an AI chef assistant.
 
 FIRST USER MESSAGE: "${firstMessageText}"
+KEY PHRASES: "${firstWords}"
 ${recipeContext}
 CONVERSATION LENGTH: ${messages.length} messages
-RECIPE COUNT: ${recipeCount > 0 ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''}` : '0 recipes'}
+RECIPE COUNT: ${recipeNames.length > 0 ? `${recipeNames.length} recipe${recipeNames.length > 1 ? 's' : ''}` : recipeCount > 0 ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''}` : '0 recipes'}
 
 Create a summary with TWO parts separated by a pipe character (|):
 
-1. TITLE (max 25 characters, must be complete - no truncation allowed):
-   - Create a short, descriptive title that captures the ESSENCE and FULL CONTEXT of the conversation
-   - Must fit in 25 characters without ellipses
-   - Use abbreviations if needed (e.g., "Healthy Grilled Recipes" not "Healthy recipes, Grilled")
-   - Be specific about the cuisine/cooking method (e.g., "Grilled Fish & Chicken", "Vegan Breakfast Ideas")
-   - If it's about variations, include that (e.g., "Rice Pudding Variants")
-   - Examples: "Quick Dinner Ideas", "Grilled Fish & Chicken", "Vegan Breakfast", "Pasta Cooking Tips"
+1. TITLE (MAX 22 characters, MUST be complete and fit on one line):
+   - Extract the MAIN TOPIC from the first user message - use the KEY INGREDIENT or CATEGORY
+   - If user mentioned specific ingredients (e.g., "polenta and cottage cheese"), create title like "Polenta Recipes" or "Cottage Cheese Ideas"
+   - If user asked for ideas/categories (e.g., "dinner ideas"), use "Dinner Ideas" or "Quick Dinners"
+   - MUST be 22 characters or LESS - prioritize shorter, clearer titles
+   - Use abbreviations: "&" not "and"
+   - Focus on the PRIMARY topic, not secondary details
+   - Examples: "Polenta Recipes" (16), "Cottage Cheese" (15), "Quick Dinners" (13), "Breakfast Ideas" (16)
 
-2. DESCRIPTION (max 55 characters, must be complete):
-   - Provide high-level context about what was discussed
-   - DO NOT list individual recipe names (avoid: "Salmon with Quinoa, Veggie Stir-fry...")
-   - Instead, summarize the theme/category (e.g., "3 healthy grilled protein recipes", "Vegan breakfast options with oatmeal")
-   - If multiple recipes, mention count and category
-   - Be concise and scannable
+2. DESCRIPTION (MAX 45 characters, MUST be complete):
+   - If recipes exist: "[X] recipes generated" or "[X] recipe[X] generated"
+   - If no recipes: Brief topic description (e.g., "Cooking tips discussed", "Ingredient substitutions")
+   - MUST be 45 characters or LESS
+   - Keep it simple and scannable
+   - Examples: "2 recipes generated" (20), "3 recipes created" (20), "Cooking tips shared" (20)
 
-CRITICAL RULES:
-- TITLE must be 25 characters or less - NO exceptions, NO ellipses
-- DESCRIPTION must be 55 characters or less - NO exceptions, NO ellipses
-- DO NOT list recipe names in description (e.g., avoid "Salmon with Quinoa, Veggie Stir-fry, Chicken...")
-- Instead, summarize the category/theme (e.g., "3 healthy grilled protein recipes")
-- Make it easy to understand what the chat was about at a glance
-- Use abbreviations in title if needed to fit (e.g., "&" instead of "and")
+CRITICAL CONSTRAINTS:
+- TITLE: MAX 22 characters - MUST be complete, NO truncation, NO ellipses
+- DESCRIPTION: MAX 45 characters - MUST be complete, NO truncation, NO ellipses
+- Both parts must be FULLY readable and complete
+- TITLE should be the PRIMARY topic/ingredient from first message
+- DESCRIPTION should be simple and informative
+- Count every character including spaces before responding
 
 Format: TITLE|DESCRIPTION
 
-Examples:
-- "Quick Dinner Ideas|3 fast pasta recipes under 30 min"
-- "Grilled Fish & Chicken|Healthy protein recipes with quinoa"
-- "Vegan Breakfast|Oatmeal and smoothie bowl options"
-- "Rice Pudding Variants|Elaborate peanut butter versions"
-- "Pasta Cooking Tips|Techniques and ingredient swaps"
+Examples (character counts shown):
+- "Polenta Recipes|2 recipes generated" (title: 16, desc: 20)
+- "Cottage Cheese|2 recipes generated" (title: 15, desc: 20)
+- "Quick Dinners|3 recipes created" (title: 13, desc: 20)
+- "Breakfast Ideas|2 recipes generated" (title: 16, desc: 20)
+- "Cooking Tips|Pasta tips shared" (title: 13, desc: 20)
 `;
     
     try {
@@ -773,26 +773,82 @@ Examples:
         
         // Validate format: should contain a pipe separator
         if (result.includes('|')) {
-            return result;
+            const [title, desc] = result.split('|');
+            const trimmedTitle = title.trim();
+            const trimmedDesc = desc.trim();
+            
+            // Validate character limits and truncate if necessary (but warn)
+            let finalTitle = trimmedTitle;
+            let finalDesc = trimmedDesc;
+            
+            // Ensure title is within limit
+            if (finalTitle.length > 22) {
+                console.warn(`Title too long (${finalTitle.length} chars): ${finalTitle}`);
+                // Try to create a better title from first words
+                const words = finalTitle.split(' ');
+                let shortened = '';
+                for (const word of words) {
+                    if (shortened.length + word.length + 1 <= 22) {
+                        shortened += (shortened ? ' ' : '') + word;
+                    } else {
+                        break;
+                    }
+                }
+                finalTitle = shortened || finalTitle.substring(0, 22);
+            }
+            
+            // Ensure description is within limit
+            if (finalDesc.length > 45) {
+                console.warn(`Description too long (${finalDesc.length} chars): ${finalDesc}`);
+                finalDesc = finalDesc.substring(0, 45);
+            }
+            
+            return `${finalTitle}|${finalDesc}`;
         } else {
-            // Fallback: if format is wrong, try to create a reasonable summary
-            // Use first user message or create a generic title
-            const fallbackTitle = firstMessageText.length > 0 
-                ? firstMessageText.substring(0, 30).replace(/[^\w\s]/g, '').trim()
-                : 'Chat Conversation';
-            const fallbackDesc = recipeCount > 0 
-                ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} discussed`
+            // Fallback: if format is wrong, create a reasonable summary from first message
+            // Extract key words from first message
+            const words = firstMessageText.toLowerCase().split(/\s+/).filter(w => 
+                w.length > 2 && !['the', 'and', 'with', 'for', 'from', 'some', 'any', 'what', 'how', 'about', 'make', 'recipe'].includes(w)
+            );
+            
+            // Create title from first 2-3 meaningful words
+            let fallbackTitle = 'Chat Conversation';
+            if (words.length > 0) {
+                const titleWords = words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1));
+                const candidateTitle = titleWords.join(' ') + (recipeNames.length > 0 ? ' Recipes' : '');
+                if (candidateTitle.length <= 22) {
+                    fallbackTitle = candidateTitle;
+                } else {
+                    fallbackTitle = titleWords[0] + ' Recipes';
+                    if (fallbackTitle.length > 22) {
+                        fallbackTitle = titleWords[0];
+                    }
+                }
+            }
+            
+            const recipeNum = recipeNames.length > 0 ? recipeNames.length : recipeCount;
+            const fallbackDesc = recipeNum > 0 
+                ? `${recipeNum} recipe${recipeNum > 1 ? 's' : ''} generated`
                 : 'Conversation with AI Chef';
             return `${fallbackTitle}|${fallbackDesc}`;
         }
     } catch (err) {
         console.error('Error generating chat summary:', err);
         // Return a basic fallback summary
-        const fallbackTitle = firstMessageText.length > 0 
-            ? firstMessageText.substring(0, 30).replace(/[^\w\s]/g, '').trim() || 'Chat Conversation'
-            : 'Chat Conversation';
-        const fallbackDesc = recipeCount > 0 
-            ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} discussed`
+        const words = firstMessageText.toLowerCase().split(/\s+/).filter(w => 
+            w.length > 2 && !['the', 'and', 'with', 'for', 'from', 'some', 'any', 'what', 'how', 'about', 'make', 'recipe'].includes(w)
+        );
+        
+        let fallbackTitle = 'Chat Conversation';
+        if (words.length > 0) {
+            const titleWords = words.slice(0, 2).map(w => w.charAt(0).toUpperCase() + w.slice(1));
+            const candidateTitle = titleWords.join(' ') + (recipeNames.length > 0 ? ' Recipes' : '');
+            fallbackTitle = candidateTitle.length <= 22 ? candidateTitle : (titleWords[0] || 'Chat Conversation');
+        }
+        
+        const recipeNum = recipeNames.length > 0 ? recipeNames.length : recipeCount;
+        const fallbackDesc = recipeNum > 0 
+            ? `${recipeNum} recipe${recipeNum > 1 ? 's' : ''} generated`
             : 'Conversation with AI Chef';
         return `${fallbackTitle}|${fallbackDesc}`;
     }

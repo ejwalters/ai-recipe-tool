@@ -116,7 +116,7 @@ export default function ChefScreen() {
         }
     };
 
-    // Format date for display - matches the design with times, Yesterday, and dates
+    // Format date for display - timeline style: "Today, 2:30 PM", "Yesterday, 8:15 AM", "2 days ago, 3:45 PM"
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         const now = new Date();
@@ -127,21 +127,23 @@ export default function ChefScreen() {
         
         const diffTime = Math.abs(now.getTime() - date.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         
-        // Same day - show time
+        // Same day - show "Today, 2:30 PM"
         if (dateOnly.getTime() === today.getTime()) {
-            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            return `Today, ${timeStr}`;
         }
-        // Yesterday
+        // Yesterday - show "Yesterday, 8:15 AM"
         if (dateOnly.getTime() === yesterday.getTime()) {
-            return 'Yesterday';
+            return `Yesterday, ${timeStr}`;
         }
-        // Within a week - show date
+        // Within a week - show "X days ago, 3:45 PM"
         if (diffDays <= 7) {
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return `${diffDays} day${diffDays > 1 ? 's' : ''} ago, ${timeStr}`;
         }
-        // Older - show date
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        // Older - show date with time
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${dateStr}, ${timeStr}`;
     };
 
     // Get icon and color for chat card based on content analysis
@@ -545,103 +547,111 @@ export default function ChefScreen() {
                             const timestamp = item.created_at ? formatDate(item.created_at) : '';
                             
                             return (
-                                <TouchableOpacity
-                                    ref={el => { chatBtnRefs.current[index] = el; }}
-                                    style={styles.chatCard}
-                                    onPress={() => openChatFromRef(chatBtnRefs.current[index], item.id)}
-                                    activeOpacity={0.92}
-                                >
-                                    {hasRecipes ? (
-                                        // Recipe-based card design - show recipes prominently
-                                        <>
-                                            <View style={styles.chatCardRecipesSection}>
-                                                <ScrollView 
-                                                    horizontal 
-                                                    showsHorizontalScrollIndicator={false}
-                                                    style={styles.recipeIconsContainer}
-                                                    contentContainerStyle={styles.recipeIconsContent}
-                                                >
-                                                    {recipes.slice(0, 5).map((recipe: any, recipeIndex: number) => {
-                                                        const recipeIconConfig = getRecipeIconConfig(
-                                                            recipe.name || '',
-                                                            recipe.tags || [],
-                                                            recipeIndex,
-                                                            recipe
-                                                        );
-                                                        return (
-                                                            <View 
-                                                                key={recipeIndex}
-                                                                style={[
-                                                                    styles.recipeIconBadge,
-                                                                    { backgroundColor: recipeIconConfig.backgroundColor }
-                                                                ]}
-                                                            >
-                                                                {recipeIconConfig.library === 'MaterialCommunityIcons' ? (
-                                                                    <MaterialCommunityIcons 
-                                                                        name={recipeIconConfig.name as any} 
-                                                                        size={28} 
-                                                                        color={recipeIconConfig.iconColor} 
-                                                                    />
-                                                                ) : (
-                                                                    <Ionicons 
-                                                                        name={recipeIconConfig.name as any} 
-                                                                        size={28} 
-                                                                        color={recipeIconConfig.iconColor} 
-                                                                    />
-                                                                )}
-                                                            </View>
-                                                        );
-                                                    })}
-                                                    {recipes.length > 5 && (
-                                                        <View style={[styles.recipeIconBadge, styles.recipeIconMore]}>
-                                                            <CustomText style={styles.recipeIconMoreText}>
-                                                                +{recipes.length - 5}
-                                                            </CustomText>
-                                                        </View>
-                                                    )}
-                                                </ScrollView>
-                                            </View>
-                                            <View style={styles.chatCardInfo}>
-                                                <CustomText style={styles.chatCardTitle} numberOfLines={1}>
-                                                    {recipes.length} Recipe{recipes.length > 1 ? 's' : ''}
-                                                </CustomText>
-                                                <View style={styles.recipeNamesContainer}>
-                                                    {recipes.slice(0, 3).map((recipe: any, idx: number) => (
-                                                        <CustomText 
-                                                            key={idx}
-                                                            style={styles.recipeNameTag}
-                                                            numberOfLines={1}
-                                                        >
-                                                            {recipe.name}
-                                                            {idx < Math.min(recipes.length, 3) - 1 ? ', ' : ''}
-                                                        </CustomText>
-                                                    ))}
-                                                    {recipes.length > 3 && (
-                                                        <CustomText style={styles.recipeNameTag}>
-                                                            +{recipes.length - 3} more
-                                                        </CustomText>
-                                                    )}
+                                <View style={styles.chatCardWrapper}>
+                                    {/* Timeline dot */}
+                                    <View style={styles.timelineDot} />
+                                    
+                                    <TouchableOpacity
+                                        ref={el => { chatBtnRefs.current[index] = el; }}
+                                        style={styles.chatCard}
+                                        onPress={() => openChatFromRef(chatBtnRefs.current[index], item.id)}
+                                        activeOpacity={0.92}
+                                    >
+                                        {hasRecipes ? (
+                                            // Recipe-based card design - timeline style
+                                            <>
+                                                {/* Header with timestamp */}
+                                                <View style={styles.chatCardHeaderRow}>
+                                                    <CustomText style={styles.chatCardTimestamp}>{timestamp}</CustomText>
                                                 </View>
-                                            </View>
-                                        </>
-                                    ) : (
-                                        // Fallback: Text-based card design
-                                        <>
-                                            <View style={[styles.chatCardIcon, { backgroundColor: iconData.bgColor }]}>
-                                                <Ionicons name={iconData.icon} size={22} color={iconData.iconColor} />
-                                            </View>
-                                            <View style={styles.chatCardInfo}>
-                                                <CustomText style={styles.chatCardTitle} numberOfLines={2} ellipsizeMode="tail">
-                                                    {title}
+                                                
+                                                {/* Title */}
+                                                <CustomText style={styles.chatCardTitle} numberOfLines={2}>
+                                                    {title || `${recipes.length} Recipe${recipes.length > 1 ? 's' : ''}`}
                                                 </CustomText>
-                                                <CustomText style={styles.chatCardDescription} numberOfLines={2} ellipsizeMode="tail">
-                                                    {description}
+                                                
+                                                {/* Description */}
+                                                <CustomText style={styles.chatCardDescription} numberOfLines={2}>
+                                                    {description || `Generated ${recipes.length} recipe${recipes.length > 1 ? 's' : ''} in this conversation`}
                                                 </CustomText>
-                                            </View>
-                                        </>
-                                    )}
-                                    <CustomText style={styles.chatCardTimestamp}>{timestamp}</CustomText>
-                                </TouchableOpacity>
+                                                
+                                                {/* Recipe thumbnails and count badge */}
+                                                <View style={styles.chatCardFooter}>
+                                                    <View style={styles.recipeThumbnails}>
+                                                        {recipes.slice(0, 5).map((recipe: any, recipeIndex: number) => {
+                                                            const recipeIconConfig = getRecipeIconConfig(
+                                                                recipe.name || '',
+                                                                recipe.tags || [],
+                                                                recipeIndex,
+                                                                recipe
+                                                            );
+                                                            return (
+                                                                <View 
+                                                                    key={recipeIndex}
+                                                                    style={[
+                                                                        styles.recipeThumbnail,
+                                                                        { backgroundColor: recipeIconConfig.backgroundColor }
+                                                                    ]}
+                                                                >
+                                                                    {recipeIconConfig.library === 'MaterialCommunityIcons' ? (
+                                                                        <MaterialCommunityIcons 
+                                                                            name={recipeIconConfig.name as any} 
+                                                                            size={18} 
+                                                                            color={recipeIconConfig.iconColor} 
+                                                                        />
+                                                                    ) : (
+                                                                        <Ionicons 
+                                                                            name={recipeIconConfig.name as any} 
+                                                                            size={18} 
+                                                                            color={recipeIconConfig.iconColor} 
+                                                                        />
+                                                                    )}
+                                                                </View>
+                                                            );
+                                                        })}
+                                                        {recipes.length > 5 && (
+                                                            <View style={[styles.recipeThumbnail, styles.recipeThumbnailMore]}>
+                                                                <CustomText style={styles.recipeThumbnailMoreText}>
+                                                                    +{recipes.length - 5}
+                                                                </CustomText>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                    
+                                                    {/* Recipe count pill badge */}
+                                                    <View style={styles.recipeCountBadge}>
+                                                        <CustomText style={styles.recipeCountBadgeText}>
+                                                            {recipes.length} recipe{recipes.length > 1 ? 's' : ''}
+                                                        </CustomText>
+                                                    </View>
+                                                </View>
+                                            </>
+                                        ) : (
+                                            // Fallback: Text-based card design
+                                            <>
+                                                {/* Header with timestamp */}
+                                                <View style={styles.chatCardHeaderRow}>
+                                                    <CustomText style={styles.chatCardTimestamp}>{timestamp}</CustomText>
+                                                </View>
+                                                
+                                                {/* Icon and content row */}
+                                                <View style={styles.chatCardContentRow}>
+                                                    <View style={[styles.chatCardIcon, { backgroundColor: iconData.bgColor }]}>
+                                                        <Ionicons name={iconData.icon} size={20} color={iconData.iconColor} />
+                                                    </View>
+                                                    <View style={styles.chatCardInfo}>
+                                                        <CustomText style={styles.chatCardTitle} numberOfLines={2} ellipsizeMode="tail">
+                                                            {title}
+                                                        </CustomText>
+                                                        <CustomText style={styles.chatCardDescription} numberOfLines={2} ellipsizeMode="tail">
+                                                            {description}
+                                                        </CustomText>
+                                                    </View>
+                                                </View>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
                             );
                         }}
                         contentContainerStyle={styles.listContent}
@@ -962,14 +972,29 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingBottom: 24,
+        paddingLeft: 8,
+    },
+    chatCardWrapper: {
+        flexDirection: 'row',
+        marginBottom: 20,
+        position: 'relative',
+    },
+    timelineDot: {
+        position: 'absolute',
+        left: -4,
+        top: 24,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#4CAF50',
+        zIndex: 1,
     },
     chatCard: {
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        marginBottom: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
+        padding: 18,
+        flex: 1,
+        marginLeft: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
@@ -978,92 +1003,94 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#F3F4F6',
     },
-    chatCardRecipesSection: {
-        marginRight: 16,
-        minWidth: 80,
-        maxWidth: 120,
-    },
-    chatCardIcon: {
-        width: 50,
-        height: 50,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 14,
-    },
-    chatCardInfo: {
-        flex: 1,
-        minWidth: 0,
-        marginRight: 8,
-        justifyContent: 'center',
-    },
-    chatCardTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#1F2937',
-        marginBottom: 4,
-        letterSpacing: -0.2,
-        lineHeight: 22,
-        flexShrink: 1,
-        flexWrap: 'wrap',
-    },
-    chatCardDescription: {
-        fontSize: 13,
-        color: '#6B7280',
-        fontWeight: '400',
-        lineHeight: 18,
-        letterSpacing: -0.1,
+    chatCardHeaderRow: {
+        marginBottom: 8,
     },
     chatCardTimestamp: {
         fontSize: 12,
         color: '#9CA3AF',
         fontWeight: '500',
-        marginLeft: 12,
-        minWidth: 60,
-        textAlign: 'right',
     },
-    recipeIconsContainer: {
-        maxHeight: 60,
+    chatCardTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 6,
+        letterSpacing: -0.3,
+        lineHeight: 24,
     },
-    recipeIconsContent: {
+    chatCardDescription: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '400',
+        lineHeight: 20,
+        letterSpacing: -0.1,
+        marginBottom: 12,
+    },
+    chatCardContentRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    chatCardIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
         alignItems: 'center',
-        gap: 10,
-        paddingRight: 4,
+        justifyContent: 'center',
+        marginRight: 12,
     },
-    recipeIconBadge: {
-        width: 64,
-        height: 64,
-        borderRadius: 16,
+    chatCardInfo: {
+        flex: 1,
+        minWidth: 0,
+    },
+    chatCardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    recipeThumbnails: {
+        flexDirection: 'row',
+        gap: 6,
+        flex: 1,
+        marginRight: 12,
+    },
+    recipeThumbnail: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-        elevation: 4,
-        borderWidth: 2,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
     },
-    recipeIconMore: {
+    recipeThumbnailMore: {
         backgroundColor: '#F3F4F6',
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
-    recipeIconMoreText: {
-        fontSize: 13,
+    recipeThumbnailMoreText: {
+        fontSize: 10,
         fontWeight: '700',
         color: '#6B7280',
     },
-    recipeNamesContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginTop: 4,
+    recipeCountBadge: {
+        backgroundColor: '#E5F3EC',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#D1E6DA',
     },
-    recipeNameTag: {
-        fontSize: 13,
-        color: '#4B5563',
-        fontWeight: '500',
-        lineHeight: 18,
+    recipeCountBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#256D85',
     },
     emptyContainer: {
         alignItems: 'center',
