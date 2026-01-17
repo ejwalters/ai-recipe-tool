@@ -382,13 +382,116 @@ router.get('/followers', async (req, res) => {
   }
 });
 
-// GET /social/feed?limit=20&offset=0
-// Uses Reddit's "hot" algorithm for better ranking that scales well
+// Helper function to get favorite counts and user interactions
+async function getRecipeEngagement(recipeIds, userId) {
+  const { data: favoriteCounts } = await supabase
+    .from('favorites')
+    .select('recipe_id, created_at')
+    .in('recipe_id', recipeIds);
+
+  const favoriteCountMap = new Map();
+  const recentFavoritesMap = new Map(); // Track favorites in last 24 hours
+  const now = Date.now();
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+  if (favoriteCounts) {
+    favoriteCounts.forEach(fav => {
+      const count = favoriteCountMap.get(fav.recipe_id) || 0;
+      favoriteCountMap.set(fav.recipe_id, count + 1);
+      
+      // Track recent favorites for trending calculation
+      const favTime = new Date(fav.created_at).getTime();
+      if (favTime > oneDayAgo) {
+        const recentCount = recentFavoritesMap.get(fav.recipe_id) || 0;
+        recentFavoritesMap.set(fav.recipe_id, recentCount + 1);
+      }
+    });
+  }
+
+  // Check which recipes are favorited by current user
+  const { data: currentUserFavorites } = await supabase
+    .from('favorites')
+    .select('recipe_id')
+    .eq('user_id', userId)
+    .in('recipe_id', recipeIds);
+
+  const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
+
+  return {
+    favoriteCountMap,
+    recentFavoritesMap,
+    currentUserFavoriteIds,
+  };
+}
+
+// Helper function to format and return recipes
+async function formatRecipes(recipes, userId, limit, offset) {
+  if (!recipes || recipes.length === 0) {
+    return {
+      recipes: [],
+      has_more: false,
+      next_offset: null,
+    };
+  }
+
+  const recipeIds = recipes.map(recipe => recipe.id);
+  const engagement = await getRecipeEngagement(recipeIds, userId);
+
+  // Get author profiles
+  const authorIds = [...new Set(recipes.map(recipe => recipe.user_id))];
+  const { data: authors, error: authorError } = await supabase
+    .from('profiles')
+    .select('id, display_name, username, avatar_url')
+    .in('id', authorIds);
+
+  if (authorError) {
+    throw new Error(authorError.message);
+  }
+
+  const authorMap = new Map(authors.map(author => [author.id, author]));
+
+  // Check which recipes are bookmarked (copied to user's recipes)
+  const { data: userRecipes } = await supabase
+    .from('recipes')
+    .select('title')
+    .eq('user_id', userId);
+
+  const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
+  const bookmarkedRecipeIds = new Set();
+  
+  recipes.forEach(recipe => {
+    if (userRecipeTitles.has(recipe.title)) {
+      bookmarkedRecipeIds.add(recipe.id);
+    }
+  });
+
+  // Apply pagination
+  const paginatedRecipes = recipes.slice(offset, offset + limit);
+
+  // Format final results
+  const results = paginatedRecipes.map(recipe => ({
+    ...recipe,
+    author: authorMap.get(recipe.user_id) || null,
+    is_favorited: engagement.currentUserFavoriteIds.has(recipe.id),
+    is_saved: bookmarkedRecipeIds.has(recipe.id),
+    favorite_count: engagement.favoriteCountMap.get(recipe.id) || 0,
+  }));
+
+  return {
+    recipes: results,
+    has_more: recipes.length > offset + limit,
+    next_offset: results.length === limit ? offset + limit : null,
+  };
+}
+
+// GET /social/feed?type=following|for_you|trending&limit=20&offset=0
 router.get('/feed', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 40, 100); // Increased max limit
+  const feedType = req.query.type || 'following'; // Default to following
+  const limit = Math.min(parseInt(req.query.limit, 10) || 40, 100);
   const offset = parseInt(req.query.offset, 10) || 0;
 
   try {
+    // Get user's follows
     const { data: followRows, error: followError } = await supabase
       .from('social_follows')
       .select('followee_id')
@@ -398,174 +501,253 @@ router.get('/feed', async (req, res) => {
       return res.status(500).json({ error: followError.message });
     }
 
-    if (!followRows || followRows.length === 0) {
-      return res.json([]);
-    }
+    const followeeIds = followRows ? followRows.map(row => row.followee_id) : [];
 
-    const followeeIds = followRows.map(row => row.followee_id);
+    let recipes = [];
 
-    // Get recipes from followed users - fetch more for ranking, then paginate
-    // Increased fetch limit for better ranking pool
-    const fetchLimit = Math.min(limit * 5, 500); // Fetch 5x for better ranking pool
-    const { data: recipes, error: recipeError } = await supabase
-      .from('recipes')
-      .select('*')
-      .in('user_id', followeeIds)
-      .order('created_at', { ascending: false })
-      .limit(fetchLimit);
+    if (feedType === 'following') {
+      // FOLLOWING: Only recipes from users you follow
+      if (followeeIds.length === 0) {
+        return res.json({
+          recipes: [],
+          has_more: false,
+          next_offset: null,
+        });
+      }
 
-    if (recipeError) {
-      return res.status(500).json({ error: recipeError.message });
-    }
+      const fetchLimit = Math.min(limit * 5, 500);
+      const { data: fetchedRecipes, error: recipeError } = await supabase
+        .from('recipes')
+        .select('*')
+        .in('user_id', followeeIds)
+        .order('created_at', { ascending: false })
+        .limit(fetchLimit);
 
-    if (!recipes || recipes.length === 0) {
-      return res.json([]);
-    }
+      if (recipeError) {
+        return res.status(500).json({ error: recipeError.message });
+      }
 
-    const recipeIds = recipes.map(recipe => recipe.id);
+      if (!fetchedRecipes || fetchedRecipes.length === 0) {
+        return res.json({
+          recipes: [],
+          has_more: false,
+          next_offset: null,
+        });
+      }
 
-    // Get favorite counts for each recipe
-    const { data: favoriteCounts } = await supabase
-      .from('favorites')
-      .select('recipe_id')
-      .in('recipe_id', recipeIds);
+      const recipeIds = fetchedRecipes.map(recipe => recipe.id);
+      const engagement = await getRecipeEngagement(recipeIds, req.user.id);
 
-    const favoriteCountMap = new Map();
-    if (favoriteCounts) {
-      favoriteCounts.forEach(fav => {
-        favoriteCountMap.set(fav.recipe_id, (favoriteCountMap.get(fav.recipe_id) || 0) + 1);
-      });
-    }
-
-    // Check which recipes are favorited by current user
-    const { data: currentUserFavorites } = await supabase
-      .from('favorites')
-      .select('recipe_id')
-      .eq('user_id', req.user.id)
-      .in('recipe_id', recipeIds);
-
-    const currentUserFavoriteIds = new Set((currentUserFavorites || []).map(f => f.recipe_id));
-
-    // Score and rank recipes using Reddit's "hot" algorithm (better for scaling)
-    // This algorithm balances recency and engagement in a way that works well at scale
-    const now = Date.now();
-    const recipesWithScores = recipes.map(recipe => {
-      const favoriteCount = favoriteCountMap.get(recipe.id) || 0;
-      const createdTime = new Date(recipe.created_at).getTime();
-      const ageInSeconds = (now - createdTime) / 1000;
-      const ageInHours = ageInSeconds / 3600;
-      
-      // Reddit's "hot" algorithm formula:
-      // score = log10(max(abs(s), 1)) * sign(s) + (epoch_seconds - 1134028003) / 45000
-      // Simplified for our use case:
-      // - s = upvotes - downvotes (we use favorites as "upvotes")
-      // - We want newer content to rank higher, so we subtract age
-      
-      // Calculate score using Reddit's hot algorithm
-      // This naturally balances new content with popular content
-      const s = favoriteCount; // Favorites act as "upvotes"
-      const order = Math.log10(Math.max(Math.abs(s), 1));
-      const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
-      
-      // Reddit uses epoch seconds, we'll use a similar approach
-      // The division by 45000 creates a time decay (roughly 12.5 hours per point)
-      // We adjust this to work better for recipes (longer shelf life than Reddit posts)
-      const seconds = Math.floor(createdTime / 1000);
-      const hotScore = order * sign + seconds / 45000;
-      
-      // Alternative: Simplified hot algorithm optimized for recipes
-      // This gives better results for content that should have longer relevance
-      const recipeHotScore = Math.log10(Math.max(favoriteCount, 1) + 1) + 
-                            (createdTime / 1000) / 45000 - 
-                            (ageInHours / 24) * 0.1; // Gentle decay over days
-      
-      return {
-        ...recipe,
-        favorite_count: favoriteCount,
-        score: recipeHotScore, // Use the recipe-optimized hot score
-        created_time: createdTime,
-      };
-    });
-
-    // Sort by score (descending - highest score first)
-    recipesWithScores.sort((a, b) => b.score - a.score);
-
-    // Diversify: Limit recipes per author to ensure variety
-    // This prevents one popular creator from dominating the feed
-    const authorCountMap = new Map();
-    const diversifiedRecipes = [];
-    const maxPerAuthor = 3; // Increased from 2 to allow more variety while still diversifying
-    
-    for (const recipe of recipesWithScores) {
-      const authorId = recipe.user_id;
-      const authorCount = authorCountMap.get(authorId) || 0;
-      
-      // Allow max recipes per author, or if score is exceptionally high (top 10%)
-      const scoreThreshold = recipesWithScores.length > 10 
-        ? recipesWithScores[Math.floor(recipesWithScores.length * 0.1)].score 
-        : recipe.score;
-      
-      if (authorCount < maxPerAuthor || recipe.score >= scoreThreshold) {
-        diversifiedRecipes.push(recipe);
-        authorCountMap.set(authorId, authorCount + 1);
+      // Score and rank recipes using Reddit's "hot" algorithm
+      const now = Date.now();
+      const recipesWithScores = fetchedRecipes.map(recipe => {
+        const favoriteCount = engagement.favoriteCountMap.get(recipe.id) || 0;
+        const createdTime = new Date(recipe.created_at).getTime();
+        const ageInHours = (now - createdTime) / (1000 * 60 * 60);
         
-        // Get enough for pagination (limit + offset)
-        if (diversifiedRecipes.length >= limit + offset) {
-          break;
+        const recipeHotScore = Math.log10(Math.max(favoriteCount, 1) + 1) + 
+                              (createdTime / 1000) / 45000 - 
+                              (ageInHours / 24) * 0.1;
+        
+        return {
+          ...recipe,
+          score: recipeHotScore,
+        };
+      });
+
+      recipesWithScores.sort((a, b) => b.score - a.score);
+
+      // Diversify: Limit recipes per author
+      const authorCountMap = new Map();
+      const diversifiedRecipes = [];
+      const maxPerAuthor = 3;
+      
+      for (const recipe of recipesWithScores) {
+        const authorId = recipe.user_id;
+        const authorCount = authorCountMap.get(authorId) || 0;
+        
+        const scoreThreshold = recipesWithScores.length > 10 
+          ? recipesWithScores[Math.floor(recipesWithScores.length * 0.1)].score 
+          : recipe.score;
+        
+        if (authorCount < maxPerAuthor || recipe.score >= scoreThreshold) {
+          diversifiedRecipes.push(recipe);
+          authorCountMap.set(authorId, authorCount + 1);
+          
+          if (diversifiedRecipes.length >= limit + offset) {
+            break;
+          }
         }
       }
-    }
-    
-    // Apply pagination
-    const paginatedRecipes = diversifiedRecipes.slice(offset, offset + limit);
+      
+      recipes = diversifiedRecipes;
 
-    // Get author profiles
-    const authorIds = [...new Set(paginatedRecipes.map(recipe => recipe.user_id))];
-    const { data: authors, error: authorError } = await supabase
-      .from('profiles')
-      .select('id, display_name, username, avatar_url')
-      .in('id', authorIds);
-
-    if (authorError) {
-      return res.status(500).json({ error: authorError.message });
-    }
-
-    const authorMap = new Map(authors.map(author => [author.id, author]));
-
-    // Check which recipes are bookmarked (copied to user's recipes)
-    // We check if user has a recipe with the same title as any of the diversified recipes
-    const { data: userRecipes } = await supabase
-      .from('recipes')
-      .select('title')
-      .eq('user_id', req.user.id);
-
-    const userRecipeTitles = new Set((userRecipes || []).map(r => r.title));
-    const bookmarkedRecipeIds = new Set();
-    
-    // Match paginated recipes by title to see if user has bookmarked (copied) them
-    paginatedRecipes.forEach(recipe => {
-      if (userRecipeTitles.has(recipe.title)) {
-        bookmarkedRecipeIds.add(recipe.id);
+    } else if (feedType === 'for_you') {
+      // FOR YOU: Discovery feed - mix of popular recipes and recipes from similar users
+      // Exclude recipes from users you already follow and your own recipes
+      const excludeUserIds = [req.user.id, ...followeeIds];
+      
+      // Get popular recipes from non-followed users
+      // Fetch more to have a good pool for ranking
+      const fetchLimit = Math.min(limit * 10, 1000);
+      const { data: allRecipes, error: recipeError } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(fetchLimit);
+      
+      if (recipeError) {
+        return res.status(500).json({ error: recipeError.message });
       }
-    });
+      
+      if (!allRecipes || allRecipes.length === 0) {
+        return res.json({
+          recipes: [],
+          has_more: false,
+          next_offset: null,
+        });
+      }
+      
+      // Filter out recipes from excluded users (users you follow + yourself)
+      const filteredRecipes = allRecipes.filter(recipe => !excludeUserIds.includes(recipe.user_id));
+      
+      if (filteredRecipes.length === 0) {
+        return res.json({
+          recipes: [],
+          has_more: false,
+          next_offset: null,
+        });
+      }
+      
+      const recipeIds = filteredRecipes.map(recipe => recipe.id);
+      const engagement = await getRecipeEngagement(recipeIds, req.user.id);
 
-    // Format final results
-    const results = paginatedRecipes.map(recipe => ({
-      ...recipe,
-      author: authorMap.get(recipe.user_id) || null,
-      is_favorited: currentUserFavoriteIds.has(recipe.id),
-      is_saved: bookmarkedRecipeIds.has(recipe.id), // Bookmarked = copied to user's recipes
-      // Remove internal scoring fields
-      score: undefined,
-      created_time: undefined,
-    }));
+      // Score recipes for discovery: balance popularity, recency, and diversity
+      const now = Date.now();
+      const recipesWithScores = filteredRecipes.map(recipe => {
+        const favoriteCount = engagement.favoriteCountMap.get(recipe.id) || 0;
+        const createdTime = new Date(recipe.created_at).getTime();
+        const ageInHours = (now - createdTime) / (1000 * 60 * 60);
+        
+        // Discovery score: favor recipes with some engagement but not too old
+        // Boost newer recipes and recipes with moderate engagement
+        const discoveryScore = Math.log10(Math.max(favoriteCount, 1) + 1) * 0.7 + 
+                              (createdTime / 1000) / 45000 - 
+                              (ageInHours / 24) * 0.15;
+        
+        return {
+          ...recipe,
+          score: discoveryScore,
+        };
+      });
 
-    // Return results with pagination metadata
-    res.json({
-      recipes: results,
-      has_more: diversifiedRecipes.length > offset + limit,
-      next_offset: results.length === limit ? offset + limit : null,
-    });
+      recipesWithScores.sort((a, b) => b.score - a.score);
+
+      // Strong diversification for discovery feed
+      const authorCountMap = new Map();
+      const diversifiedRecipes = [];
+      const maxPerAuthor = 2; // Stricter limit for discovery
+      
+      for (const recipe of recipesWithScores) {
+        const authorId = recipe.user_id;
+        const authorCount = authorCountMap.get(authorId) || 0;
+        
+        if (authorCount < maxPerAuthor) {
+          diversifiedRecipes.push(recipe);
+          authorCountMap.set(authorId, authorCount + 1);
+          
+          if (diversifiedRecipes.length >= limit + offset) {
+            break;
+          }
+        }
+      }
+      
+      recipes = diversifiedRecipes;
+
+    } else if (feedType === 'trending') {
+      // TRENDING: Algorithmically trending recipes based on engagement velocity
+      // Recipes that are gaining favorites quickly in recent time
+      const fetchLimit = Math.min(limit * 10, 1000);
+      const { data: allRecipes, error: recipeError } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(fetchLimit);
+
+      if (recipeError) {
+        return res.status(500).json({ error: recipeError.message });
+      }
+
+      if (!allRecipes || allRecipes.length === 0) {
+        return res.json({
+          recipes: [],
+          has_more: false,
+          next_offset: null,
+        });
+      }
+
+      const recipeIds = allRecipes.map(recipe => recipe.id);
+      const engagement = await getRecipeEngagement(recipeIds, req.user.id);
+
+      // Calculate trending score based on engagement velocity
+      const now = Date.now();
+      const recipesWithScores = allRecipes.map(recipe => {
+        const favoriteCount = engagement.favoriteCountMap.get(recipe.id) || 0;
+        const recentFavorites = engagement.recentFavoritesMap.get(recipe.id) || 0;
+        const createdTime = new Date(recipe.created_at).getTime();
+        const ageInHours = (now - createdTime) / (1000 * 60 * 60);
+        
+        // Trending algorithm: prioritize recipes with high recent engagement
+        // Velocity = recent favorites / total favorites (if total > 0)
+        // Boost recipes that are gaining traction quickly
+        const velocity = favoriteCount > 0 ? recentFavorites / favoriteCount : 0;
+        const trendingScore = (recentFavorites * 2) + // Recent favorites weighted heavily
+                              (favoriteCount * 0.5) + // Total favorites
+                              (velocity * 10) + // Velocity boost
+                              (createdTime / 1000) / 45000 - // Recency boost
+                              (ageInHours / 24) * 0.2; // Age penalty
+        
+        return {
+          ...recipe,
+          score: trendingScore,
+        };
+      });
+
+      recipesWithScores.sort((a, b) => b.score - a.score);
+
+      // Moderate diversification for trending
+      const authorCountMap = new Map();
+      const diversifiedRecipes = [];
+      const maxPerAuthor = 3;
+      
+      for (const recipe of recipesWithScores) {
+        const authorId = recipe.user_id;
+        const authorCount = authorCountMap.get(authorId) || 0;
+        
+        const scoreThreshold = recipesWithScores.length > 10 
+          ? recipesWithScores[Math.floor(recipesWithScores.length * 0.15)].score 
+          : recipe.score;
+        
+        if (authorCount < maxPerAuthor || recipe.score >= scoreThreshold) {
+          diversifiedRecipes.push(recipe);
+          authorCountMap.set(authorId, authorCount + 1);
+          
+          if (diversifiedRecipes.length >= limit + offset) {
+            break;
+          }
+        }
+      }
+      
+      recipes = diversifiedRecipes;
+
+    } else {
+      return res.status(400).json({ error: 'Invalid feed type. Use: following, for_you, or trending' });
+    }
+
+    // Format and return results
+    const result = await formatRecipes(recipes, req.user.id, limit, offset);
+    res.json(result);
+
   } catch (error) {
     console.error('[social/feed] Error:', error);
     res.status(500).json({ error: 'Failed to load social feed' });

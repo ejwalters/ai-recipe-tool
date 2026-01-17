@@ -52,9 +52,10 @@ type UserResult = {
   profession?: string | null;
 };
 
-const SEGMENTS: Array<{ id: 'feed' | 'discover'; label: string }> = [
-  { id: 'feed', label: 'Feed' },
-  { id: 'discover', label: 'Discover' },
+const SEGMENTS: Array<{ id: 'for_you' | 'following' | 'trending'; label: string }> = [
+  { id: 'for_you', label: 'For You' },
+  { id: 'following', label: 'Following' },
+  { id: 'trending', label: 'Trending' },
 ];
 
 // Avatar component with fallback
@@ -263,7 +264,7 @@ const FeedLoadingSkeleton = () => {
 
 export default function SocialScreen() {
   const router = useRouter();
-  const [activeSegment, setActiveSegment] = useState<'feed' | 'discover'>('feed');
+  const [activeSegment, setActiveSegment] = useState<'for_you' | 'following' | 'trending'>('for_you');
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
@@ -303,7 +304,12 @@ export default function SocialScreen() {
         setLoadingFeed(true);
       }
 
-      const response = await socialService.getFeed(40, offset);
+      // Map segment to feed type
+      const feedType = activeSegment === 'for_you' ? 'for_you' : 
+                      activeSegment === 'following' ? 'following' : 
+                      'trending';
+      
+      const response = await socialService.getFeed(40, offset, feedType);
       
       // Handle both old format (array) and new format (object with recipes array)
       let recipes: FeedItem[];
@@ -347,7 +353,7 @@ export default function SocialScreen() {
       setLoadingMoreFeed(false);
       setFeedRefreshing(false);
     }
-  }, [feedRefreshing]);
+  }, [feedRefreshing, activeSegment]);
 
   const handleRefreshFeed = useCallback(() => {
     setFeedRefreshing(true);
@@ -362,10 +368,14 @@ export default function SocialScreen() {
     }
   }, [loadingMoreFeed, loadingFeed, feedHasMore, feedOffset, loadFeed]);
 
-  // Load feed on initial mount
+  // Load feed when segment changes or on initial mount
   useEffect(() => {
-    if (activeSegment === 'feed' && !feedLoadedRef.current) {
-      loadFeed(true);
+    // Reset feed when switching segments
+    if (activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') {
+      feedLoadedRef.current = false;
+      setFeed([]);
+      setFeedOffset(0);
+      loadFeed(true, 0);
     }
   }, [activeSegment, loadFeed]);
 
@@ -374,7 +384,7 @@ export default function SocialScreen() {
     useCallback(() => {
       // Only reload on focus if feed hasn't been loaded yet
       // This prevents reloading when navigating back from recipe/profile
-      if (activeSegment === 'feed' && !feedLoadedRef.current) {
+      if ((activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') && !feedLoadedRef.current) {
         loadFeed(true);
       }
     }, [activeSegment, loadFeed])
@@ -904,27 +914,6 @@ export default function SocialScreen() {
           </TouchableOpacity>
         </View>
 
-        {activeSegment === 'discover' && (
-          <View style={styles.headerSearchBar}>
-            <Ionicons name="search" size={20} color="#9CA3AF" />
-            <TextInput
-              style={styles.headerSearchInput}
-              placeholder="Search chefs and food lovers..."
-              placeholderTextColor="#9CA3AF"
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-            />
-            {!!searchTerm && (
-              <TouchableOpacity onPress={() => setSearchTerm('')}>
-                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
         <View style={styles.segmentContainer}>
           {SEGMENTS.map((segment, index) => {
             const isActive = segment.id === activeSegment;
@@ -949,7 +938,7 @@ export default function SocialScreen() {
         </View>
       </View>
 
-      {activeSegment === 'feed' ? (
+      {(activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') ? (
         <View style={styles.feedContainer}>
           {loadingFeed && !feedLoadedRef.current ? (
             <FeedLoadingSkeleton />
@@ -979,65 +968,7 @@ export default function SocialScreen() {
             />
           )}
         </View>
-      ) : (
-        <View style={styles.discoverContainer}>
-          {searchError && (
-            <CustomText style={styles.errorText}>{searchError}</CustomText>
-          )}
-
-          {searchTerm.length === 0 ? (
-            loadingSuggested ? (
-              <DiscoverLoadingSkeleton />
-            ) : suggestedCreators.length > 0 ? (
-              <>
-                <CustomText style={styles.suggestedSectionTitle}>Suggested creators</CustomText>
-                <FlatList
-                  data={suggestedCreators}
-                  keyExtractor={item => item.id}
-                  renderItem={renderUserRow}
-                  contentContainerStyle={styles.listContent}
-                  showsVerticalScrollIndicator={false}
-                />
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <Ionicons name="search-circle-outline" size={56} color="#9CA3AF" />
-                <CustomText style={styles.emptyHeading}>Start exploring</CustomText>
-                <CustomText style={styles.emptyText}>
-                  Search for friends, family, or favorite creators to follow.
-                </CustomText>
-              </View>
-            )
-          ) : searching && searchResults.length === 0 ? (
-            <DiscoverLoadingSkeleton />
-          ) : (
-            <FlatList
-              data={searchResults}
-              keyExtractor={item => item.id}
-              renderItem={renderUserRow}
-              contentContainerStyle={styles.listContent}
-              ListEmptyComponent={
-                searching ? (
-                  <View style={styles.emptyState}>
-                    <ActivityIndicator size="small" color="#4CAF50" />
-                    <CustomText style={[styles.emptyText, { marginTop: 16 }]}>
-                      Searching...
-                    </CustomText>
-                  </View>
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Ionicons name="person-add-outline" size={48} color="#9CA3AF" />
-                    <CustomText style={styles.emptyHeading}>No creators found</CustomText>
-                    <CustomText style={styles.emptyText}>
-                      Try a different name.
-                    </CustomText>
-                  </View>
-                )
-              }
-            />
-          )}
-        </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
