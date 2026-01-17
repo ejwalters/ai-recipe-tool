@@ -260,21 +260,22 @@ export default function ChefScreen() {
         if (summary.includes('|')) {
             const [title] = summary.split('|');
             const trimmedTitle = title.trim();
-            // Ensure title fits - if it's longer than 25 chars, use first 25 without ellipses
-            // But allow it to wrap naturally on the card
-            return trimmedTitle || 'Chat Conversation';
+            // Remove any quotation marks that might have been added
+            const cleanedTitle = trimmedTitle.replace(/^["']|["']$/g, '').trim();
+            // Return full title - let UI handle wrapping with numberOfLines
+            return cleanedTitle || 'Chat Conversation';
         }
         
         // Fallback for old format summaries: use first part
         const words = summary.split(' ');
         if (words[0] && words[0][0] === words[0][0].toUpperCase() && words[0].length > 3) {
-            const title = words.slice(0, 3).join(' ');
-            // Allow wrapping instead of ellipses
-            return title.length > 25 ? title.substring(0, 25) : title;
+            const title = words.slice(0, 4).join(' ');
+            // Remove quotation marks and return full title
+            return title.replace(/^["']|["']$/g, '').trim();
         }
         
-        // Final fallback: first 25 chars (no ellipses - will wrap)
-        return summary.substring(0, 25);
+        // Final fallback: return summary without quotation marks (will wrap in UI)
+        return summary.replace(/^["']|["']$/g, '').trim();
     };
 
     // Get description from summary (format: "TITLE|DESCRIPTION")
@@ -286,8 +287,8 @@ export default function ChefScreen() {
             const parts = summary.split('|');
             const description = parts.length > 1 ? parts[1] : parts[0];
             const desc = description.trim();
-            // Ensure description fits - max 55 chars, no ellipses (will wrap)
-            return desc.substring(0, 55);
+            // Remove quotation marks and return full description - let UI handle wrapping
+            return desc.replace(/^["']|["']$/g, '').trim();
         }
         
         // Fallback for old format: remove title part if detected
@@ -300,13 +301,15 @@ export default function ChefScreen() {
                 // Remove recipe name listings - look for pattern like "Recipe1, Recipe2, Recipe3..."
                 const withoutRecipeNames = cleanedDesc.replace(/[A-Z][a-z\s&]+(?:recipe|with|and|,|\.|\.\.\.)/gi, '').trim();
                 const finalDesc = withoutRecipeNames || cleanedDesc;
-                return finalDesc.substring(0, 55);
+                // Remove quotation marks and return full description
+                return finalDesc.replace(/^["']|["']$/g, '').trim();
             }
         }
         
         // Final fallback: use summary as description, but clean up recipe name listings
         const cleaned = summary.replace(/[A-Z][a-z\s&]+(?:recipe|with|and|,|\.|\.\.\.)/gi, '').trim();
-        return cleaned.substring(0, 55) || summary.substring(0, 55);
+        const finalCleaned = cleaned.replace(/^["']|["']$/g, '').trim();
+        return finalCleaned || summary.replace(/^["']|["']$/g, '').trim();
     };
 
     // Chef Loading Skeleton Component
@@ -566,13 +569,13 @@ export default function ChefScreen() {
                                                 </View>
                                                 
                                                 {/* Title */}
-                                                <CustomText style={styles.chatCardTitle} numberOfLines={2}>
+                                                <CustomText style={styles.chatCardTitle} numberOfLines={3}>
                                                     {title || `${recipes.length} Recipe${recipes.length > 1 ? 's' : ''}`}
                                                 </CustomText>
                                                 
                                                 {/* Description */}
                                                 <CustomText style={styles.chatCardDescription} numberOfLines={2}>
-                                                    {description || `Generated ${recipes.length} recipe${recipes.length > 1 ? 's' : ''} in this conversation`}
+                                                    {description || `${recipes.length} recipe${recipes.length > 1 ? 's' : ''} generated`}
                                                 </CustomText>
                                                 
                                                 {/* Recipe thumbnails and count badge */}
@@ -1002,6 +1005,7 @@ const styles = StyleSheet.create({
         elevation: 3,
         borderWidth: 1,
         borderColor: '#F3F4F6',
+        minHeight: 120,
     },
     chatCardHeaderRow: {
         marginBottom: 8,
@@ -1018,6 +1022,7 @@ const styles = StyleSheet.create({
         marginBottom: 6,
         letterSpacing: -0.3,
         lineHeight: 24,
+        flexShrink: 1,
     },
     chatCardDescription: {
         fontSize: 13,
@@ -1026,6 +1031,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
         letterSpacing: -0.1,
         marginBottom: 12,
+        flexShrink: 1,
     },
     chatCardContentRow: {
         flexDirection: 'row',
