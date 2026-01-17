@@ -77,7 +77,12 @@ export default function ChefScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            fetchChats('', false); // Load all chats when screen is focused
+            // Small delay to ensure backend has finished updating summaries after messages
+            const timer = setTimeout(() => {
+                fetchChats('', false); // Load all chats when screen is focused
+            }, 300); // 300ms delay to ensure backend has processed any recent updates
+            
+            return () => clearTimeout(timer);
         }, [fetchChats])
     );
 
