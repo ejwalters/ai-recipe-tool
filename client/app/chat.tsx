@@ -3,8 +3,10 @@ import { View, StyleSheet, TouchableOpacity, Image, ScrollView, TextInput, Activ
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import { getRecipeIconConfig } from '../utils/recipeIcons';
 
 const PALETTE = {
     appBackground: '#FFFFFF',
@@ -33,110 +35,24 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const TYPING_STEPS = [
     {
-        icon: 'leaf-outline' as const,
-        label: 'Gathering ingredients',
-    },
-    {
-        icon: 'flame-outline' as const,
-        label: 'Simmering ideas',
-    },
-    {
         icon: 'restaurant-outline' as const,
-        label: 'Plating your recipe',
+        label: 'Thinking...',
+    },
+    {
+        icon: 'bulb-outline' as const,
+        label: 'Formulating response',
+    },
+    {
+        icon: 'sparkles-outline' as const,
+        label: 'Adding finishing touches',
+    },
+    {
+        icon: 'search-outline' as const,
+        label: 'Analyzing your request',
     },
 ];
 
-// Helper function to detect if message is a recipe request
-// Defaults to recipe animation (true) unless it's VERY clearly a follow-up question
-// This is safer since we can't know the AI's response until after it's generated
-const isRecipeRequest = (message: string, previousMessages?: any[]): boolean => {
-    const lowerMessage = message.toLowerCase().trim();
-    
-    // Very strict patterns - only use simple animation for questions that are DEFINITELY not recipe requests
-    // These are questions about concepts, substitutions, temperatures, or times that don't mention cooking
-    const definitelyNotRecipePatterns = [
-        /^what is [a-z]+ \?*$/i, // "what is X?" without cooking context
-        /^how does [a-z]+ work \?*$/i, // "how does X work?"
-        /^why [a-z]+ \?*$/i, // "why X?"
-        /^tell me about [a-z]+(?!.*recipe|.*cook|.*make)/i, // "tell me about X" without cooking context
-    ];
-    
-    // Check for substitution/temperature/time questions that don't mention cooking
-    const isTechnicalQuestion = (
-        /\b(substitute|replace|instead of|alternative for)\b/i.test(lowerMessage) ||
-        /\b(temperature|how hot|how cold|\d+ degrees?)\b/i.test(lowerMessage) ||
-        /\b(how long|how much time|how many minutes?)\b/i.test(lowerMessage)
-    ) && !/\b(recipe|make|cook|bake|dish|meal|prepare|ingredient|food|oven|stove)\b/i.test(lowerMessage);
-    
-    // Only use simple animation if it matches a "definitely not recipe" pattern
-    if (definitelyNotRecipePatterns.some(pattern => pattern.test(lowerMessage)) || isTechnicalQuestion) {
-        return false; // Use simple conversational animation
-    }
-    
-    // Default to recipe animation for everything else
-    // This includes: ingredient names ("chia seed pudding"), recipe requests, cooking questions, etc.
-    return true;
-};
-
-// Simple Conversational Typing Indicator
-const ConversationalTypingIndicator = () => {
-    const dot1 = useRef(new Animated.Value(0.3)).current;
-    const dot2 = useRef(new Animated.Value(0.3)).current;
-    const dot3 = useRef(new Animated.Value(0.3)).current;
-
-    useEffect(() => {
-        const animateDot = (dot: Animated.Value, delay: number) => {
-            return Animated.loop(
-                Animated.sequence([
-                    Animated.delay(delay),
-                    Animated.timing(dot, {
-                        toValue: 1,
-                        duration: 400,
-                        easing: Easing.ease,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(dot, {
-                        toValue: 0.3,
-                        duration: 400,
-                        easing: Easing.ease,
-                        useNativeDriver: true,
-                    }),
-                ])
-            );
-        };
-
-        const anim1 = animateDot(dot1, 0);
-        const anim2 = animateDot(dot2, 200);
-        const anim3 = animateDot(dot3, 400);
-
-        anim1.start();
-        anim2.start();
-        anim3.start();
-
-        return () => {
-            anim1.stop();
-            anim2.stop();
-            anim3.stop();
-        };
-    }, [dot1, dot2, dot3]);
-
-    return (
-        <View style={[styles.messageRow, styles.aiRow, { marginTop: 18 }]}>
-            <View style={styles.aiAvatarCircle}>
-                <Ionicons name="restaurant-outline" size={18} color="#FFFFFF" />
-            </View>
-            <View style={styles.aiMessageContainer}>
-                <View style={styles.conversationalTypingBubble}>
-                    <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
-                    <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
-                    <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
-                </View>
-            </View>
-        </View>
-    );
-};
-
-// AI Recipe Typing Indicator Component (with full animation)
+// Generic AI Chef Typing Indicator Component
 const AITypingIndicator = () => {
     const rotation = useRef(new Animated.Value(0)).current;
     const fade = useRef(new Animated.Value(1)).current;
@@ -183,7 +99,7 @@ const AITypingIndicator = () => {
                     <Animated.View style={[styles.typingIconWrapper, { transform: [{ rotate: spin }] }]}>
                         <Ionicons name="restaurant-outline" size={20} color="#fff" />
                     </Animated.View>
-                    <CustomText style={styles.typingTitle}>AI Chef is crafting your dish</CustomText>
+                    <CustomText style={styles.typingTitle}>AI Chef is working</CustomText>
                 </View>
                 <Animated.View style={{ opacity: fade }}>
                     <View style={styles.typingStepRow}>
@@ -201,16 +117,6 @@ const AITypingIndicator = () => {
                             ]}
                         />
                     ))}
-                </View>
-                <View style={styles.typingRecipeSkeleton}>
-                    <View style={styles.typingSkeletonImage} />
-                    <View style={styles.typingSkeletonTextBlock}>
-                        <View style={styles.typingSkeletonTitle} />
-                        <View style={styles.typingSkeletonMetaRow}>
-                            <View style={styles.typingSkeletonMeta} />
-                            <View style={styles.typingSkeletonMeta} />
-                        </View>
-                    </View>
                 </View>
             </View>
         </View>
@@ -242,28 +148,38 @@ function extractJsonFromString(str: string) {
 
 // Custom Recipe Card Message Component
 const RecipeCardMessage = ({ message, onPress, onSave, saved }: { message: any; onPress: () => void; onSave?: () => void; saved?: boolean }) => {
-    // Use message ID to generate consistent colors
-    const colorIndex = parseInt(message.id.replace(/\D/g, '')) % CARD_COLORS.length;
-    const cardColor = CARD_COLORS[colorIndex];
-    const iconBg = CARD_ICON_BG[colorIndex];
-    
     if (!message.recipe) return null;
+
+    // Get icon config for this recipe
+    const iconConfig = getRecipeIconConfig(
+        message.recipe.name || '',
+        message.recipe.tags || [],
+        0,
+        message.recipe
+    );
+
+    // Extract time from recipe (handle both "30 min" and "30" formats)
+    const timeValue = message.recipe.time?.replace(/[^0-9]/g, '') || '';
+    const timeDisplay = message.recipe.time || (timeValue ? `${timeValue} min` : '');
 
     return (
         <TouchableOpacity
-            style={[
-                styles.recipeCardModern,
-                {
-                    backgroundColor: PALETTE.aiBubble,
-                    borderColor: PALETTE.aiBorder,
-                },
-            ]} 
-            activeOpacity={0.88}
+            style={styles.recipeCardModern}
+            activeOpacity={0.9}
             onPress={onPress}
         >
-            <View style={styles.recipeCardRightModern}>
+            <View style={[styles.recipeCardIconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
+                {iconConfig.library === 'MaterialCommunityIcons' ? (
+                    <MaterialCommunityIcons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
+                ) : (
+                    <Ionicons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
+                )}
+            </View>
+            <View style={styles.recipeCardContent}>
                 <View style={styles.recipeCardHeader}>
-                    <CustomText style={styles.recipeTitleModern}>{message.recipe.name}</CustomText>
+                    <CustomText style={styles.recipeCardTitle} numberOfLines={2} ellipsizeMode="tail">
+                        {message.recipe.name}
+                    </CustomText>
                     {onSave && (
                         <TouchableOpacity
                             onPress={(e) => {
@@ -275,17 +191,20 @@ const RecipeCardMessage = ({ message, onPress, onSave, saved }: { message: any; 
                         >
                             <Ionicons 
                                 name={saved ? "checkmark-circle" : "bookmark-outline"} 
-                                size={22} 
+                                size={20} 
                                 color={saved ? "#256D85" : "#9CA3AF"} 
                             />
                         </TouchableOpacity>
                     )}
                 </View>
-                <CustomText style={styles.recipeDescriptionModern}>
-                    {message.recipe.time || Array.isArray(message.recipe.ingredients) 
-                        ? `${message.recipe.time || 'Quick'} • ${Array.isArray(message.recipe.ingredients) ? message.recipe.ingredients.length : 0} ingredients`
-                        : 'Delicious recipe'}
-                </CustomText>
+                {timeDisplay && (
+                    <View style={styles.recipeCardMeta}>
+                        <View style={styles.recipeCardMetaItem}>
+                            <Ionicons name="time-outline" size={14} color="#6B7280" />
+                            <CustomText style={styles.recipeCardMetaText}>{timeDisplay}</CustomText>
+                        </View>
+                    </View>
+                )}
             </View>
         </TouchableOpacity>
     );
@@ -540,18 +459,13 @@ export default function ChatScreen() {
                 }
             ];
             
-            // Detect if this is a recipe request or conversational follow-up
-            // Pass previous messages for context
-            const isRecipe = isRecipeRequest(userMessage, prev);
-            
-            // Add typing indicator with type
+            // Add typing indicator
             updatedMessages.push({ 
                 id: 'typing-indicator',
                 text: '[TYPING]',
                 createdAt: new Date(),
                 role: 'assistant',
-                isTyping: true,
-                typingType: isRecipe ? 'recipe' : 'conversational'
+                isTyping: true
             });
             
             return updatedMessages;
@@ -648,10 +562,7 @@ export default function ChatScreen() {
             }
         ]);
         
-        // Detect if this is a recipe request or conversational follow-up
-        const isRecipe = isRecipeRequest(userMessage);
-        
-        // Add typing indicator with type
+        // Add typing indicator
         setMessages(prev => [
             ...prev,
             { 
@@ -659,8 +570,7 @@ export default function ChatScreen() {
                 text: '[TYPING]',
                 createdAt: new Date(),
                 role: 'assistant',
-                isTyping: true,
-                typingType: isRecipe ? 'recipe' : 'conversational'
+                isTyping: true
             }
         ]);
         
@@ -849,11 +759,7 @@ export default function ChatScreen() {
                         
                         // Render typing indicator
                         if (msg.isTyping) {
-                            if (msg.typingType === 'recipe') {
-                                return <AITypingIndicator key={msg.id} />;
-                            } else {
-                                return <ConversationalTypingIndicator key={msg.id} />;
-                            }
+                            return <AITypingIndicator key={msg.id} />;
                         }
                         
                         // Render recipe card(s)
@@ -1375,55 +1281,66 @@ const styles = StyleSheet.create({
     // Recipe card styles
     recipeCardModern: {
         flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 20,
-        paddingVertical: 16,
-        paddingHorizontal: 18,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
         marginBottom: 12,
-        shadowColor: 'rgba(0, 0, 0, 0.08)',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 12,
-        elevation: 3,
+        marginHorizontal: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
         borderWidth: 1,
         borderColor: '#F3F4F6',
-        maxWidth: SCREEN_WIDTH * 0.75,
-        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        maxWidth: SCREEN_WIDTH * 0.85,
     },
-    recipeCardRightModern: {
-        flex: 1,
+    recipeCardIconSquare: {
+        width: 70,
+        height: 70,
+        borderRadius: 14,
+        alignItems: 'center',
         justifyContent: 'center',
-        minWidth: 0,
+        marginRight: 16,
+    },
+    recipeCardContent: {
+        flex: 1,
     },
     recipeCardHeader: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        marginBottom: 6,
+        marginBottom: 8,
     },
-    recipeTitleModern: {
+    recipeCardTitle: {
         fontSize: 17,
-        fontWeight: '700',
+        fontWeight: '600',
         color: '#1F2937',
-        textAlign: 'left',
+        marginBottom: 0,
+        lineHeight: 22,
         flex: 1,
         marginRight: 8,
-        letterSpacing: -0.3,
+    },
+    recipeCardMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 0,
+    },
+    recipeCardMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 16,
+    },
+    recipeCardMetaText: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '500',
+        marginLeft: 4,
     },
     recipeSaveButton: {
         padding: 4,
-        marginTop: -4,
-    },
-    recipeDescriptionModern: {
-        fontSize: 14,
-        color: '#6B7280',
-        fontWeight: '500',
-        textAlign: 'left',
-        lineHeight: 20,
-        marginBottom: 0,
-        flexShrink: 1,
-        maxWidth: '100%',
-        letterSpacing: -0.1,
+        marginTop: -2,
     },
     metaPillWrapperModern: {
         width: '100%',
@@ -1549,31 +1466,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(220, 228, 240, 0.85)',
         marginRight: 8,
         flex: 0.3,
-    },
-    // Conversational typing indicator styles
-    conversationalTypingBubble: {
-        backgroundColor: PALETTE.aiBubble,
-        borderRadius: 20,
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        minWidth: 60,
-        shadowColor: 'rgba(0, 0, 0, 0.06)',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    typingDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#9CA3AF',
     },
     // Welcome section styles
     welcomeSection: {
