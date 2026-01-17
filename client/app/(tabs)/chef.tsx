@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecipeIconConfig } from '../../utils/recipeIcons';
+import RecipeDetailsModal from '../../components/experimental/RecipeDetailsModal';
 
 export default function ChefScreen() {
     const router = useRouter();
@@ -19,6 +20,9 @@ export default function ChefScreen() {
     const [userId, setUserId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+    const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+    const [selectedRecipes, setSelectedRecipes] = useState<any[]>([]);
 
     // Fetch user ID on mount
     useEffect(() => {
@@ -119,6 +123,14 @@ export default function ChefScreen() {
         } else {
             router.push({ pathname: '/chat', params: { chat_id: chatId } });
         }
+    };
+
+    // Helper to open recipe details modal
+    const openRecipeDetails = (chatId: string, recipes: any[]) => {
+        console.log('Opening recipe details for chat:', chatId, 'with', recipes.length, 'recipes');
+        setSelectedChatId(chatId);
+        setSelectedRecipes(recipes);
+        setRecipeModalVisible(true);
     };
 
     // Format date for display - timeline style: "Today, 2:30 PM", "Yesterday, 8:15 AM", "2 days ago, 3:45 PM"
@@ -562,7 +574,12 @@ export default function ChefScreen() {
                                     <TouchableOpacity
                                         ref={el => { chatBtnRefs.current[index] = el; }}
                                         style={styles.chatCard}
-                                        onPress={() => openChatFromRef(chatBtnRefs.current[index], item.id)}
+                                        onPress={() => {
+                                            // Only open chat if recipe modal isn't visible
+                                            if (!recipeModalVisible) {
+                                                openChatFromRef(chatBtnRefs.current[index], item.id);
+                                            }
+                                        }}
                                         activeOpacity={0.92}
                                     >
                                         {hasRecipes ? (
@@ -585,7 +602,14 @@ export default function ChefScreen() {
                                                 
                                                 {/* Recipe thumbnails and count badge */}
                                                 <View style={styles.chatCardFooter}>
-                                                    <View style={styles.recipeThumbnails}>
+                                                    <TouchableOpacity 
+                                                        style={styles.recipeThumbnails}
+                                                        activeOpacity={0.7}
+                                                        onPress={() => {
+                                                            console.log('Recipe thumbnails clicked');
+                                                            openRecipeDetails(item.id, recipes);
+                                                        }}
+                                                    >
                                                         {recipes.slice(0, 5).map((recipe: any, recipeIndex: number) => {
                                                             const recipeIconConfig = getRecipeIconConfig(
                                                                 recipe.name || '',
@@ -624,14 +648,21 @@ export default function ChefScreen() {
                                                                 </CustomText>
                                                             </View>
                                                         )}
-                                                    </View>
+                                                    </TouchableOpacity>
                                                     
                                                     {/* Recipe count pill badge */}
-                                                    <View style={styles.recipeCountBadge}>
+                                                    <TouchableOpacity 
+                                                        style={styles.recipeCountBadge}
+                                                        activeOpacity={0.7}
+                                                        onPress={() => {
+                                                            console.log('Recipe badge clicked');
+                                                            openRecipeDetails(item.id, recipes);
+                                                        }}
+                                                    >
                                                         <CustomText style={styles.recipeCountBadgeText}>
                                                             {recipes.length} recipe{recipes.length > 1 ? 's' : ''}
                                                         </CustomText>
-                                                    </View>
+                                                    </TouchableOpacity>
                                                 </View>
                                             </>
                                         ) : (
@@ -677,6 +708,14 @@ export default function ChefScreen() {
                         }
                     />
                 </View>
+
+                {/* Recipe Details Modal */}
+                <RecipeDetailsModal
+                    visible={recipeModalVisible}
+                    onClose={() => setRecipeModalVisible(false)}
+                    chatId={selectedChatId || ''}
+                    initialRecipes={selectedRecipes}
+                />
             </View>
         </SafeAreaView>
     );
