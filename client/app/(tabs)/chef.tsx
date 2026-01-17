@@ -255,18 +255,22 @@ export default function ChefScreen() {
         // Check if summary uses the pipe format (TITLE|DESCRIPTION)
         if (summary.includes('|')) {
             const [title] = summary.split('|');
-            return title.trim() || 'Chat Conversation';
+            const trimmedTitle = title.trim();
+            // Ensure title fits - if it's longer than 25 chars, use first 25 without ellipses
+            // But allow it to wrap naturally on the card
+            return trimmedTitle || 'Chat Conversation';
         }
         
         // Fallback for old format summaries: use first part
         const words = summary.split(' ');
         if (words[0] && words[0][0] === words[0][0].toUpperCase() && words[0].length > 3) {
             const title = words.slice(0, 3).join(' ');
-            return title.length > 30 ? title.substring(0, 27) + '...' : title;
+            // Allow wrapping instead of ellipses
+            return title.length > 25 ? title.substring(0, 25) : title;
         }
         
-        // Final fallback: first 30 chars
-        return summary.substring(0, 30) + (summary.length > 30 ? '...' : '');
+        // Final fallback: first 25 chars (no ellipses - will wrap)
+        return summary.substring(0, 25);
     };
 
     // Get description from summary (format: "TITLE|DESCRIPTION")
@@ -278,7 +282,8 @@ export default function ChefScreen() {
             const parts = summary.split('|');
             const description = parts.length > 1 ? parts[1] : parts[0];
             const desc = description.trim();
-            return desc.substring(0, 70) + (desc.length > 70 ? '...' : '');
+            // Ensure description fits - max 55 chars, no ellipses (will wrap)
+            return desc.substring(0, 55);
         }
         
         // Fallback for old format: remove title part if detected
@@ -288,12 +293,16 @@ export default function ChefScreen() {
             // Skip common separators
             const cleanedDesc = desc.replace(/^[,\-\s:]+/, '').trim();
             if (cleanedDesc.length > 0) {
-                return cleanedDesc.substring(0, 70) + (cleanedDesc.length > 70 ? '...' : '');
+                // Remove recipe name listings - look for pattern like "Recipe1, Recipe2, Recipe3..."
+                const withoutRecipeNames = cleanedDesc.replace(/[A-Z][a-z\s&]+(?:recipe|with|and|,|\.|\.\.\.)/gi, '').trim();
+                const finalDesc = withoutRecipeNames || cleanedDesc;
+                return finalDesc.substring(0, 55);
             }
         }
         
-        // Final fallback: use summary as description
-        return summary.substring(0, 70) + (summary.length > 70 ? '...' : '');
+        // Final fallback: use summary as description, but clean up recipe name listings
+        const cleaned = summary.replace(/[A-Z][a-z\s&]+(?:recipe|with|and|,|\.|\.\.\.)/gi, '').trim();
+        return cleaned.substring(0, 55) || summary.substring(0, 55);
     };
 
     // Chef Loading Skeleton Component
@@ -520,8 +529,12 @@ export default function ChefScreen() {
                                         <Ionicons name={iconData.icon} size={22} color={iconData.iconColor} />
                                     </View>
                                     <View style={styles.chatCardInfo}>
-                                        <CustomText style={styles.chatCardTitle}>{title}</CustomText>
-                                        <CustomText style={styles.chatCardDescription}>{description}</CustomText>
+                                        <CustomText style={styles.chatCardTitle} numberOfLines={2} ellipsizeMode="tail">
+                                            {title}
+                                        </CustomText>
+                                        <CustomText style={styles.chatCardDescription} numberOfLines={2} ellipsizeMode="tail">
+                                            {description}
+                                        </CustomText>
                                     </View>
                                     <CustomText style={styles.chatCardTimestamp}>{timestamp}</CustomText>
                                 </TouchableOpacity>
@@ -870,6 +883,7 @@ const styles = StyleSheet.create({
     chatCardInfo: {
         flex: 1,
         minWidth: 0,
+        marginRight: 8,
     },
     chatCardTitle: {
         fontSize: 16,
@@ -878,6 +892,8 @@ const styles = StyleSheet.create({
         marginBottom: 4,
         letterSpacing: -0.2,
         lineHeight: 22,
+        flexShrink: 1,
+        flexWrap: 'wrap',
     },
     chatCardDescription: {
         fontSize: 13,

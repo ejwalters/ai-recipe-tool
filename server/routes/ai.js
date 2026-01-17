@@ -656,33 +656,71 @@ async function generateChatSummary(messages) {
         return false;
     }).length;
 
+    // Extract recipe names from messages for context
+    const recipeNames = [];
+    messages.forEach(m => {
+        try {
+            const content = m.content;
+            if (typeof content === 'string') {
+                const parsed = JSON.parse(content);
+                if (parsed && parsed.is_recipe && parsed.recipes && Array.isArray(parsed.recipes)) {
+                    parsed.recipes.forEach((recipe: any) => {
+                        if (recipe.name && !recipeNames.includes(recipe.name)) {
+                            recipeNames.push(recipe.name);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            // Not JSON, skip
+        }
+    });
+    
+    const recipeContext = recipeNames.length > 0 
+        ? `Recipes discussed: ${recipeNames.slice(0, 3).join(', ')}${recipeNames.length > 3 ? '...' : ''}`
+        : 'No specific recipes provided';
+
     const prompt = `
-You are creating a concise, user-friendly summary for a chat history list. The user had a conversation with an AI chef assistant.
+You are creating a clear, scannable summary for a chat history card. The user had a conversation with an AI chef assistant.
 
 FIRST USER MESSAGE: "${firstMessageText}"
-
+${recipeContext}
 CONVERSATION LENGTH: ${messages.length} messages
-RECIPE COUNT: ${recipeCount > 0 ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''} provided` : 'No recipes'}
+RECIPE COUNT: ${recipeCount > 0 ? `${recipeCount} recipe${recipeCount > 1 ? 's' : ''}` : '0 recipes'}
 
 Create a summary with TWO parts separated by a pipe character (|):
-1. TITLE (max 30 characters): A short, descriptive title that captures the main topic. Examples: "Quick Dinner Ideas", "Healthy Breakfast Recipes", "Cooking Tips", "Chicken Stir-Fry", "Vegan Meal Plan"
-2. DESCRIPTION (max 70 characters): A brief, readable description of what was discussed or provided. Be specific but concise. Examples: "3 quick dinner recipes with chicken and pasta", "Breakfast ideas with eggs and toast", "Tips for cooking pasta perfectly", "Vegetarian stir-fry with tofu and vegetables"
 
-IMPORTANT:
-- Do NOT just list recipe names with "recipe" after each (avoid: "Pasta recipe, Chicken recipe, ...")
-- Do NOT use repetitive titles if multiple chats have similar topics
-- Use natural, conversational language
-- If multiple recipes were provided, mention the count and type (e.g., "3 Italian dinner recipes")
-- If it was a follow-up conversation with variations, note that (e.g., "Modified recipes with peanut butter")
-- Keep it scannable and useful for quickly identifying what the chat was about
+1. TITLE (max 25 characters, must be complete - no truncation allowed):
+   - Create a short, descriptive title that captures the ESSENCE and FULL CONTEXT of the conversation
+   - Must fit in 25 characters without ellipses
+   - Use abbreviations if needed (e.g., "Healthy Grilled Recipes" not "Healthy recipes, Grilled")
+   - Be specific about the cuisine/cooking method (e.g., "Grilled Fish & Chicken", "Vegan Breakfast Ideas")
+   - If it's about variations, include that (e.g., "Rice Pudding Variants")
+   - Examples: "Quick Dinner Ideas", "Grilled Fish & Chicken", "Vegan Breakfast", "Pasta Cooking Tips"
 
-Format your response as: TITLE|DESCRIPTION
+2. DESCRIPTION (max 55 characters, must be complete):
+   - Provide high-level context about what was discussed
+   - DO NOT list individual recipe names (avoid: "Salmon with Quinoa, Veggie Stir-fry...")
+   - Instead, summarize the theme/category (e.g., "3 healthy grilled protein recipes", "Vegan breakfast options with oatmeal")
+   - If multiple recipes, mention count and category
+   - Be concise and scannable
 
-Example responses:
-- "Quick Dinner Ideas|3 fast pasta and chicken recipes under 30 min"
-- "Healthy Breakfast|Vegan oatmeal and smoothie bowl options"
-- "Cooking Tips|How to cook pasta and substitute ingredients"
-- "Rice Pudding Variations|Elaborate peanut butter and vegan versions"
+CRITICAL RULES:
+- TITLE must be 25 characters or less - NO exceptions, NO ellipses
+- DESCRIPTION must be 55 characters or less - NO exceptions, NO ellipses
+- DO NOT list recipe names in description (e.g., avoid "Salmon with Quinoa, Veggie Stir-fry, Chicken...")
+- Instead, summarize the category/theme (e.g., "3 healthy grilled protein recipes")
+- Make it easy to understand what the chat was about at a glance
+- Use abbreviations in title if needed to fit (e.g., "&" instead of "and")
+
+Format: TITLE|DESCRIPTION
+
+Examples:
+- "Quick Dinner Ideas|3 fast pasta recipes under 30 min"
+- "Grilled Fish & Chicken|Healthy protein recipes with quinoa"
+- "Vegan Breakfast|Oatmeal and smoothie bowl options"
+- "Rice Pudding Variants|Elaborate peanut butter versions"
+- "Pasta Cooking Tips|Techniques and ingredient swaps"
 `;
     
     try {
