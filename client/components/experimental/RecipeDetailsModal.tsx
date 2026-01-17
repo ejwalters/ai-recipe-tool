@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, ScrollView, Modal, Animated, Dimens
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import CustomText from '../CustomText';
 import { getRecipeIconConfig } from '../../utils/recipeIcons';
 
@@ -24,6 +25,7 @@ interface RecipeDetailsModalProps {
 }
 
 export default function RecipeDetailsModal({ visible, onClose, chatId, initialRecipes = [] }: RecipeDetailsModalProps) {
+    const router = useRouter();
     const [recipes, setRecipes] = useState<Recipe[]>(initialRecipes);
     const [loading, setLoading] = useState(true);
     const slideAnim = useRef(new Animated.Value(screenHeight)).current;
@@ -213,7 +215,39 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
                                     );
 
                                     return (
-                                        <View key={index} style={styles.recipeItem}>
+                                        <TouchableOpacity 
+                                            key={index} 
+                                            style={styles.recipeItem}
+                                            activeOpacity={0.7}
+                                            onPress={() => {
+                                                // Navigate to recipe detail with full recipe data
+                                                handleClose(); // Close modal first
+                                                setTimeout(() => {
+                                                    const params: any = {
+                                                        title: recipe.name,
+                                                        time: recipe.time || '',
+                                                        isAI: '1',
+                                                        fromChat: '1',
+                                                    };
+                                                    
+                                                    // Add recipe data as JSON strings (matching chat.tsx pattern)
+                                                    if (recipe.tags) {
+                                                        params.tags = JSON.stringify(recipe.tags);
+                                                    }
+                                                    if (recipe.ingredients) {
+                                                        params.ingredients = JSON.stringify(recipe.ingredients);
+                                                    }
+                                                    if (recipe.steps) {
+                                                        params.steps = JSON.stringify(recipe.steps);
+                                                    }
+                                                    
+                                                    router.push({
+                                                        pathname: '/recipe-detail',
+                                                        params
+                                                    });
+                                                }, 250); // Small delay to allow modal close animation
+                                            }}
+                                        >
                                             {/* Recipe Icon */}
                                             <View style={[styles.recipeItemIcon, { backgroundColor: iconConfig.backgroundColor }]}>
                                                 {iconConfig.library === 'MaterialCommunityIcons' ? (
@@ -253,7 +287,10 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
                                                     )}
                                                 </View>
                                             </View>
-                                        </View>
+                                            
+                                            {/* Arrow Icon */}
+                                            <Ionicons name="chevron-forward" size={20} color="#D1D5DB" style={styles.recipeItemArrow} />
+                                        </TouchableOpacity>
                                     );
                                 })}
                             </ScrollView>
@@ -343,6 +380,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 12,
+        paddingRight: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#F3F4F6',
     },
@@ -383,5 +421,8 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#6B7280',
         fontWeight: '400',
+    },
+    recipeItemArrow: {
+        marginLeft: 8,
     },
 });

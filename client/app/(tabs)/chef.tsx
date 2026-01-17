@@ -1,17 +1,18 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import CustomText from '../../components/CustomText';
-import { View, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, ActivityIndicator, Platform, Animated, ScrollView } from 'react-native';
+import { View, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, ActivityIndicator, Platform, Animated, ScrollView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getRecipeIconConfig } from '../../utils/recipeIcons';
 import RecipeDetailsModal from '../../components/experimental/RecipeDetailsModal';
 
 export default function ChefScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const startChatRef = useRef<any>(null);
     const chatBtnRefs = useRef<any[]>([]);
     const [chats, setChats] = useState<{ id: string; created_at?: string; summary?: string; recipes?: string }[]>([]);
@@ -382,9 +383,10 @@ export default function ChefScreen() {
         });
 
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor="#F3F0FF" translucent={Platform.OS === 'android'} />
                 {/* Header Skeleton */}
-                <View style={styles.headerBg}>
+                <View style={[styles.headerBg, { paddingTop: insets.top + 20 }]}>
                     <View style={styles.headerRow}>
                         <View style={styles.profileIconContainer}>
                             <CustomText style={styles.avatarEmoji}>🐕</CustomText>
@@ -446,7 +448,7 @@ export default function ChefScreen() {
                         </View>
                     </View>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     };
 
@@ -456,21 +458,21 @@ export default function ChefScreen() {
 
     if (!userId) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
-                <View style={styles.container}>
-                    <View style={styles.authContainer}>
-                        <Ionicons name="lock-closed" size={48} color="#6DA98C" />
-                        <CustomText style={styles.authText}>You must be logged in to view your AI Chef chats.</CustomText>
-                    </View>
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={Platform.OS === 'android'} />
+                <View style={styles.authContainer}>
+                    <Ionicons name="lock-closed" size={48} color="#6DA98C" />
+                    <CustomText style={styles.authText}>You must be logged in to view your AI Chef chats.</CustomText>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top']}>
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#F3F0FF" translucent={Platform.OS === 'android'} />
             {/* Header */}
-            <View style={styles.headerBg}>
+            <View style={[styles.headerBg, { paddingTop: insets.top + 20 }]}>
                 <View style={styles.headerRow}>
                     <View style={styles.profileIconContainer}>
                         <CustomText style={styles.avatarEmoji}>🐕</CustomText>
@@ -515,14 +517,14 @@ export default function ChefScreen() {
                         activeOpacity={0.92}
                     >
                         <View style={styles.newChatIcon}>
-                            <Ionicons name="add" size={28} color="#FFFFFF" />
+                            <Ionicons name="add" size={24} color="#FFFFFF" />
                         </View>
                         <View style={styles.newChatText}>
                             <CustomText style={styles.newChatTitle}>New Recipe Chat</CustomText>
                             <CustomText style={styles.newChatDesc}>Ask for ideas or instructions</CustomText>
                         </View>
                         <View style={styles.newChatArrowContainer}>
-                            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                            <Ionicons name="chevron-forward" size={20} color="#4B5563" />
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -717,16 +719,14 @@ export default function ChefScreen() {
                     initialRecipes={selectedRecipes}
                 />
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        paddingHorizontal: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
     },
     // Chef Loading Skeleton Styles
     skeletonLine: {
@@ -849,7 +849,6 @@ const styles = StyleSheet.create({
     },
     headerBg: {
         backgroundColor: '#F3F0FF',
-        paddingTop: Platform.OS === 'ios' ? 56 : 40,
         paddingBottom: 32,
         paddingHorizontal: 20,
     },
@@ -931,64 +930,56 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     newChatContainer: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
         marginBottom: 24,
     },
     newChatButton: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
+        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        overflow: 'hidden',
-        shadowColor: '#9CA3AF',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
         elevation: 2,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
     },
     newChatIcon: {
-        backgroundColor: '#4CAF50',
-        width: 40,
-        height: 40,
-        borderTopLeftRadius: 12,
-        borderBottomLeftRadius: 12,
-        borderTopRightRadius: 10,
-        borderBottomRightRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    newChatText: {
-        flex: 1,
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-    },
-    newChatTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#1F2937',
-        marginBottom: 2,
-        letterSpacing: -0.2,
-    },
-    newChatDesc: {
-        fontSize: 13,
-        color: '#6B7280',
-        fontWeight: '400',
-        letterSpacing: -0.1,
-        lineHeight: 18,
-    },
-    newChatArrowContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#6DA98C',
+        width: 48,
+        height: 48,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
+    },
+    newChatText: {
+        flex: 1,
+    },
+    newChatTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 4,
+        letterSpacing: -0.3,
+    },
+    newChatDesc: {
+        fontSize: 14,
+        color: '#6B7280',
+        fontWeight: '400',
+        lineHeight: 20,
+    },
+    newChatArrowContainer: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8,
     },
     chatHistoryContainer: {
         flex: 1,
