@@ -244,13 +244,49 @@ IMPORTANT:
             .order('created_at', { ascending: true });
 
         if (!fetchAllError && allMessages) {
-            // 7. Generate summary
-            const summary = await generateChatSummary(allMessages);
+            // 7. Extract recipes from messages
+            const recipes = [];
+            allMessages.forEach(m => {
+                try {
+                    const content = m.content;
+                    if (typeof content === 'string') {
+                        const parsed = JSON.parse(content);
+                        if (parsed && parsed.is_recipe && parsed.recipes && Array.isArray(parsed.recipes)) {
+                            parsed.recipes.forEach((recipe) => {
+                                if (recipe.name) {
+                                    recipes.push({
+                                        name: recipe.name,
+                                        time: recipe.time || '',
+                                        tags: Array.isArray(recipe.tags) ? recipe.tags : []
+                                    });
+                                }
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // Not JSON, skip
+                }
+            });
 
-            // 8. Update the chats table with the new summary
+            // 8. Generate summary (only if no recipes, or as fallback)
+            let summary = '';
+            if (recipes.length === 0) {
+                summary = await generateChatSummary(allMessages);
+            } else {
+                // Create a simple title from first user message or recipe count
+                const firstUserMessage = allMessages.find(m => m.role === 'user');
+                const firstMessageText = firstUserMessage ? firstUserMessage.content.substring(0, 30) : '';
+                const title = firstMessageText || `${recipes.length} Recipe${recipes.length > 1 ? 's' : ''}`;
+                summary = `${title}|${recipes.length} recipe${recipes.length > 1 ? 's' : ''} generated`;
+            }
+
+            // 9. Update the chats table with summary and recipes
             await supabase
                 .from('chats')
-                .update({ summary })
+                .update({ 
+                    summary,
+                    recipes: recipes.length > 0 ? JSON.stringify(recipes) : null
+                })
                 .eq('id', chatId);
         }
         res.json({ chat_id: chatId, ai_response: aiResponse, message_id: insertedMessage.id });
