@@ -500,7 +500,7 @@ export default function ChefScreen() {
                         />
                         {searchQuery ? (
                             <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                                <Ionicons name="close-circle" size={20} color="#B0B0B0" />
+                                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
                             </TouchableOpacity>
                         ) : null}
                     </View>
@@ -848,9 +848,9 @@ const styles = StyleSheet.create({
         lineHeight: 24,
     },
     headerBg: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F3F0FF',
         paddingTop: Platform.OS === 'ios' ? 56 : 40,
-        paddingBottom: 20,
+        paddingBottom: 32,
         paddingHorizontal: 20,
     },
     headerRow: {
@@ -899,42 +899,36 @@ const styles = StyleSheet.create({
     },
     searchBarWrapper: {
         alignItems: 'center',
-        marginTop: 20,
-        marginBottom: 20,
+        marginTop: -12,
+        marginBottom: 24,
+        paddingHorizontal: 24,
         zIndex: 10,
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderWidth: 0,
-        paddingHorizontal: 16,
-        height: 50,
-        width: '92%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        paddingHorizontal: 20,
+        height: 56,
+        width: '100%',
     },
     searchIcon: {
         marginRight: 12,
-        width: 20,
-        height: 20,
-        tintColor: '#9CA3AF',
     },
     searchInput: {
         flex: 1,
         fontSize: 16,
-        fontWeight: '400',
+        fontWeight: '500',
         color: '#1F2937',
         fontFamily: 'System',
         paddingVertical: 0,
     },
     clearButton: {
         marginLeft: 8,
-        padding: 2,
+        padding: 4,
     },
     newChatContainer: {
         paddingHorizontal: 20,

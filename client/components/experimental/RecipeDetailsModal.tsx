@@ -29,8 +29,18 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
     const slideAnim = useRef(new Animated.Value(screenHeight)).current;
     const backdropOpacity = useRef(new Animated.Value(0)).current;
 
+    // Reset recipes when modal opens with new chatId
+    useEffect(() => {
+        if (visible && chatId) {
+            setRecipes(initialRecipes);
+        }
+    }, [visible, chatId, initialRecipes]);
+
     useEffect(() => {
         if (visible) {
+            // Reset animation value
+            slideAnim.setValue(screenHeight);
+            backdropOpacity.setValue(0);
             // Fetch full recipe data from chat messages
             fetchFullRecipes();
             // Animate in
@@ -61,7 +71,7 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
                 }),
             ]).start();
         }
-    }, [visible]);
+    }, [visible, slideAnim, backdropOpacity]);
 
     const fetchFullRecipes = async () => {
         if (!chatId) {
@@ -153,7 +163,13 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
                 <Animated.View 
                     style={[
                         styles.modalContent,
-                        { transform: [{ translateY: slideAnim }] }
+                        { 
+                            transform: [{ translateY: slideAnim }],
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                        }
                     ]}
                 >
                     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
@@ -197,87 +213,46 @@ export default function RecipeDetailsModal({ visible, onClose, chatId, initialRe
                                     );
 
                                     return (
-                                        <View key={index} style={styles.recipeCard}>
-                                            {/* Recipe Header */}
-                                            <View style={styles.recipeHeader}>
-                                                <View style={[styles.recipeIcon, { backgroundColor: iconConfig.backgroundColor }]}>
-                                                    {iconConfig.library === 'MaterialCommunityIcons' ? (
-                                                        <MaterialCommunityIcons 
-                                                            name={iconConfig.name as any} 
-                                                            size={32} 
-                                                            color={iconConfig.iconColor} 
-                                                        />
-                                                    ) : (
-                                                        <Ionicons 
-                                                            name={iconConfig.name as any} 
-                                                            size={32} 
-                                                            color={iconConfig.iconColor} 
-                                                        />
-                                                    )}
-                                                </View>
-                                                <View style={styles.recipeHeaderInfo}>
-                                                    <CustomText style={styles.recipeName} numberOfLines={2}>
-                                                        {recipe.name}
-                                                    </CustomText>
+                                        <View key={index} style={styles.recipeItem}>
+                                            {/* Recipe Icon */}
+                                            <View style={[styles.recipeItemIcon, { backgroundColor: iconConfig.backgroundColor }]}>
+                                                {iconConfig.library === 'MaterialCommunityIcons' ? (
+                                                    <MaterialCommunityIcons 
+                                                        name={iconConfig.name as any} 
+                                                        size={24} 
+                                                        color={iconConfig.iconColor} 
+                                                    />
+                                                ) : (
+                                                    <Ionicons 
+                                                        name={iconConfig.name as any} 
+                                                        size={24} 
+                                                        color={iconConfig.iconColor} 
+                                                    />
+                                                )}
+                                            </View>
+                                            
+                                            {/* Recipe Info */}
+                                            <View style={styles.recipeItemInfo}>
+                                                <CustomText style={styles.recipeItemName} numberOfLines={2}>
+                                                    {recipe.name}
+                                                </CustomText>
+                                                <View style={styles.recipeItemMeta}>
                                                     {recipe.time && (
-                                                        <View style={styles.recipeMeta}>
-                                                            <Ionicons name="time-outline" size={14} color="#6B7280" />
+                                                        <View style={styles.recipeMetaRow}>
+                                                            <Ionicons name="time-outline" size={12} color="#6B7280" />
                                                             <CustomText style={styles.recipeMetaText}>{recipe.time}</CustomText>
+                                                        </View>
+                                                    )}
+                                                    {recipe.ingredients && recipe.ingredients.length > 0 && (
+                                                        <View style={styles.recipeMetaRow}>
+                                                            <Ionicons name="list-outline" size={12} color="#6B7280" />
+                                                            <CustomText style={styles.recipeMetaText}>
+                                                                {recipe.ingredients.length} ingredient{recipe.ingredients.length > 1 ? 's' : ''}
+                                                            </CustomText>
                                                         </View>
                                                     )}
                                                 </View>
                                             </View>
-
-                                            {/* Tags */}
-                                            {recipe.tags && recipe.tags.length > 0 && (
-                                                <View style={styles.tagsRow}>
-                                                    {recipe.tags.slice(0, 4).map((tag, tagIdx) => (
-                                                        <View key={tagIdx} style={styles.tagChip}>
-                                                            <CustomText style={styles.tagText}>{tag}</CustomText>
-                                                        </View>
-                                                    ))}
-                                                </View>
-                                            )}
-
-                                            {/* Ingredients */}
-                                            {recipe.ingredients && recipe.ingredients.length > 0 && (
-                                                <View style={styles.section}>
-                                                    <View style={styles.sectionHeader}>
-                                                        <Ionicons name="list-outline" size={18} color="#256D85" />
-                                                        <CustomText style={styles.sectionTitle}>Ingredients</CustomText>
-                                                    </View>
-                                                    <View style={styles.list}>
-                                                        {recipe.ingredients.map((ingredient, ingIdx) => (
-                                                            <View key={ingIdx} style={styles.listItem}>
-                                                                <View style={styles.bullet} />
-                                                                <CustomText style={styles.listItemText}>{ingredient}</CustomText>
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-
-                                            {/* Steps */}
-                                            {recipe.steps && recipe.steps.length > 0 && (
-                                                <View style={styles.section}>
-                                                    <View style={styles.sectionHeader}>
-                                                        <Ionicons name="footsteps-outline" size={18} color="#256D85" />
-                                                        <CustomText style={styles.sectionTitle}>Instructions</CustomText>
-                                                    </View>
-                                                    <View style={styles.list}>
-                                                        {recipe.steps.map((step, stepIdx) => (
-                                                            <View key={stepIdx} style={styles.stepItem}>
-                                                                <View style={styles.stepNumber}>
-                                                                    <CustomText style={styles.stepNumberText}>{stepIdx + 1}</CustomText>
-                                                                </View>
-                                                                <CustomText style={styles.stepText}>{step}</CustomText>
-                                                            </View>
-                                                        ))}
-                                                    </View>
-                                                </View>
-                                            )}
-
-                                            {index < recipes.length - 1 && <View style={styles.divider} />}
                                         </View>
                                     );
                                 })}
@@ -303,7 +278,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        maxHeight: screenHeight * 0.85,
+        maxHeight: screenHeight * 0.5,
+        width: '100%',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.1,
@@ -318,8 +294,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 24,
-        paddingTop: 20,
-        paddingBottom: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#F3F4F6',
     },
@@ -327,13 +303,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     headerTitle: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: '700',
         color: '#1F2937',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     headerSubtitle: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#6B7280',
         fontWeight: '400',
     },
@@ -350,11 +326,11 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 24,
-        paddingTop: 20,
-        paddingBottom: 32,
+        paddingTop: 12,
+        paddingBottom: 24,
     },
     loadingContainer: {
-        paddingVertical: 60,
+        paddingVertical: 40,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -363,127 +339,49 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#6B7280',
     },
-    recipeCard: {
-        marginBottom: 24,
-    },
-    recipeHeader: {
+    recipeItem: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 16,
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
     },
-    recipeIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 14,
+    recipeItemIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+        elevation: 2,
     },
-    recipeHeaderInfo: {
+    recipeItemInfo: {
         flex: 1,
     },
-    recipeName: {
-        fontSize: 20,
-        fontWeight: '700',
+    recipeItemName: {
+        fontSize: 16,
+        fontWeight: '600',
         color: '#1F2937',
-        marginBottom: 6,
-        lineHeight: 26,
+        marginBottom: 4,
+        lineHeight: 22,
     },
-    recipeMeta: {
+    recipeItemMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    recipeMetaRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
     },
     recipeMetaText: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#6B7280',
-        fontWeight: '500',
-    },
-    tagsRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginBottom: 20,
-    },
-    tagChip: {
-        backgroundColor: '#F3F4F6',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-    },
-    tagText: {
-        fontSize: 12,
-        color: '#4B5563',
-        fontWeight: '500',
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1F2937',
-    },
-    list: {
-        gap: 8,
-    },
-    listItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 10,
-    },
-    bullet: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#256D85',
-        marginTop: 7,
-    },
-    listItemText: {
-        flex: 1,
-        fontSize: 14,
-        color: '#4B5563',
-        lineHeight: 20,
-    },
-    stepItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-    },
-    stepNumber: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: '#E5F3EC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 2,
-    },
-    stepNumberText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#256D85',
-    },
-    stepText: {
-        flex: 1,
-        fontSize: 14,
-        color: '#4B5563',
-        lineHeight: 20,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#F3F4F6',
-        marginTop: 24,
+        fontWeight: '400',
     },
 });
