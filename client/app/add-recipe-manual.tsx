@@ -1,36 +1,55 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import CustomText from '../components/CustomText';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { getRecipeIconConfig, IconConfig } from '../utils/recipeIcons';
 
 // Helper to call backend
-async function addRecipeToServer({ user_id, title, time, tags, ingredients, steps }: { user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
+async function addRecipeToServer({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }: { user_id: string; title: string; description?: string; time: string; servings: string; tags: string[]; ingredients: string[]; steps: string[]; icon_library?: string; icon_name?: string; icon_bg_color?: string; icon_color?: string }) {
     const response = await fetch('https://familycooksclean.onrender.com/recipes/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, title, time, tags, ingredients, steps }),
+        body: JSON.stringify({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }),
     });
     if (!response.ok) throw new Error('Failed to add recipe');
     return response.json();
 }
 
 // Helper to update recipe on backend
-async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingredients, steps }: { recipeId: string; user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
+async function updateRecipeOnServer({ recipeId, user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }: { recipeId: string; user_id: string; title: string; description?: string; time: string; servings: string; tags: string[]; ingredients: string[]; steps: string[]; icon_library?: string; icon_name?: string; icon_bg_color?: string; icon_color?: string }) {
     const response = await fetch(`https://familycooksclean.onrender.com/recipes/${recipeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, title, time, tags, ingredients, steps }),
+        body: JSON.stringify({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }),
     });
     if (!response.ok) throw new Error('Failed to update recipe');
     return response.json();
 }
 
+// Popular icon options for selection
+const POPULAR_ICONS: IconConfig[] = [
+    { library: 'MaterialCommunityIcons', name: 'food-variant', backgroundColor: '#FFF8DC', iconColor: '#F4C430' },
+    { library: 'MaterialCommunityIcons', name: 'food-drumstick', backgroundColor: '#FFE0E6', iconColor: '#E91E63' },
+    { library: 'MaterialCommunityIcons', name: 'food-steak', backgroundColor: '#FFCDD2', iconColor: '#C62828' },
+    { library: 'MaterialCommunityIcons', name: 'pizza', backgroundColor: '#FFE5D0', iconColor: '#FF5722' },
+    { library: 'MaterialCommunityIcons', name: 'cupcake', backgroundColor: '#F3E5F5', iconColor: '#9C27B0' },
+    { library: 'MaterialCommunityIcons', name: 'bread-slice', backgroundColor: '#FFF8DC', iconColor: '#FBC02D' },
+    { library: 'MaterialCommunityIcons', name: 'ice-cream', backgroundColor: '#E1F5FE', iconColor: '#0288D1' },
+    { library: 'MaterialCommunityIcons', name: 'coffee', backgroundColor: '#FFF3E0', iconColor: '#5D4037' },
+    { library: 'MaterialCommunityIcons', name: 'food-croissant', backgroundColor: '#FFF8DC', iconColor: '#F4C430' },
+    { library: 'MaterialCommunityIcons', name: 'fish', backgroundColor: '#E6EEFF', iconColor: '#2196F3' },
+    { library: 'MaterialCommunityIcons', name: 'carrot', backgroundColor: '#E0F4E0', iconColor: '#66BB6A' },
+    { library: 'MaterialCommunityIcons', name: 'chef-hat', backgroundColor: '#E5E7EB', iconColor: '#6B7280' },
+];
+
 export default function AddRecipeManualScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
     
     // Edit mode state
     const isEditMode = params.editMode === 'true';
@@ -41,6 +60,7 @@ export default function AddRecipeManualScreen() {
     
     // Initialize state with empty values first
     const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [newTag, setNewTag] = useState('');
     const [time, setTime] = useState('');
@@ -49,6 +69,25 @@ export default function AddRecipeManualScreen() {
     const [steps, setSteps] = useState(['']);
     const [saving, setSaving] = useState(false);
     
+    // Collapsible sections
+    const [iconSectionExpanded, setIconSectionExpanded] = useState(false);
+    const [tagsSectionExpanded, setTagsSectionExpanded] = useState(false);
+    const [ingredientsExpanded, setIngredientsExpanded] = useState(true);
+    const [instructionsExpanded, setInstructionsExpanded] = useState(true);
+    
+    // Icon selection
+    const [selectedIcon, setSelectedIcon] = useState<IconConfig | null>(null);
+    
+    // Auto-select icon based on title/tags when they change
+    useEffect(() => {
+        if (title || tags.length > 0) {
+            const autoIcon = getRecipeIconConfig(title, tags, 0);
+            if (!selectedIcon) {
+                setSelectedIcon(autoIcon);
+            }
+        }
+    }, [title, tags]);
+    
     // Initialize data only once when component mounts
     useEffect(() => {
         if (initializedRef.current) return;
@@ -56,6 +95,7 @@ export default function AddRecipeManualScreen() {
         // Set initial values based on params
         if (isEditMode) {
             if (params.title) setTitle(params.title as string);
+            if (params.description) setDescription(params.description as string);
             if (params.time) setTime(params.time as string);
             if (params.servings) setServings(params.servings as string);
             
@@ -91,9 +131,20 @@ export default function AddRecipeManualScreen() {
                     console.error('Error parsing tags:', error);
                 }
             }
+            
+            // Set icon from params if available
+            if (params.icon_library && params.icon_name) {
+                setSelectedIcon({
+                    library: params.icon_library as 'MaterialCommunityIcons' | 'Ionicons',
+                    name: params.icon_name as string,
+                    backgroundColor: (params.icon_bg_color as string) || '#F3F4F6',
+                    iconColor: (params.icon_color as string) || '#9CA3AF',
+                });
+            }
         } else {
             // Handle extracted data from photo
             if (params.extractedTitle) setTitle(params.extractedTitle as string);
+            if (params.extractedDescription) setDescription(params.extractedDescription as string);
             if (params.extractedTime) setTime(params.extractedTime as string);
             if (params.extractedServings) setServings(params.extractedServings as string);
             
@@ -151,13 +202,14 @@ export default function AddRecipeManualScreen() {
     }
 
     function removeIngredient(idx: number) {
-        if (ingredients.length > 1) {
-            setIngredients(ingredients.filter((_, i) => i !== idx));
-        }
+        const filtered = ingredients.filter((_, i) => i !== idx);
+        setIngredients(filtered.length > 0 ? filtered : ['']);
     }
 
     function updateIngredient(idx: number, value: string) {
-        setIngredients(ingredients.map((ing, i) => (i === idx ? value : ing)));
+        const updated = [...ingredients];
+        updated[idx] = value;
+        setIngredients(updated);
     }
 
     function addStep() {
@@ -165,13 +217,14 @@ export default function AddRecipeManualScreen() {
     }
 
     function removeStep(idx: number) {
-        if (steps.length > 1) {
-            setSteps(steps.filter((_, i) => i !== idx));
-        }
+        const filtered = steps.filter((_, i) => i !== idx);
+        setSteps(filtered.length > 0 ? filtered : ['']);
     }
 
     function updateStep(idx: number, value: string) {
-        setSteps(steps.map((step, i) => (i === idx ? value : step)));
+        const updated = [...steps];
+        updated[idx] = value;
+        setSteps(updated);
     }
 
     async function handleSaveRecipe() {
@@ -194,17 +247,26 @@ export default function AddRecipeManualScreen() {
                 return;
             }
             
+            const iconData = selectedIcon || getRecipeIconConfig(title, tags, 0);
+            
+            const recipeData: any = {
+                user_id,
+                title,
+                description: description.trim() || undefined,
+                time,
+                servings,
+                tags: tags,
+                ingredients: ingredientsArr,
+                steps: stepsArr,
+                icon_library: iconData.library,
+                icon_name: iconData.name,
+                icon_bg_color: iconData.backgroundColor,
+                icon_color: iconData.iconColor,
+            };
+            
             if (isEditMode) {
                 // Update existing recipe
-                await updateRecipeOnServer({
-                    recipeId,
-                    user_id,
-                    title,
-                    time,
-                    tags: tags,
-                    ingredients: ingredientsArr,
-                    steps: stepsArr,
-                });
+                await updateRecipeOnServer({ recipeId, ...recipeData });
                 
                 // Navigate back to the updated recipe
                 router.replace({
@@ -213,14 +275,7 @@ export default function AddRecipeManualScreen() {
                 });
             } else {
                 // Add new recipe
-                await addRecipeToServer({
-                    user_id,
-                    title,
-                    time,
-                    tags: tags,
-                    ingredients: ingredientsArr,
-                    steps: stepsArr,
-                });
+                await addRecipeToServer(recipeData);
                 
                 router.replace('/(tabs)');
             }
@@ -231,33 +286,23 @@ export default function AddRecipeManualScreen() {
         }
     }
 
+    const currentIcon = selectedIcon || getRecipeIconConfig(title, tags, 0);
+
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
             
             {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerContent}>
+            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                <View style={styles.headerRow}>
                     <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={26} color="#222" />
+                        <Ionicons name="arrow-back" size={24} color="#1F2937" />
                     </TouchableOpacity>
-                    <CustomText style={styles.logoText}>🍳</CustomText>
-                    <View style={{ flex: 1 }} />
+                    <CustomText style={styles.headerTitle}>Add Recipe</CustomText>
+                    <TouchableOpacity style={styles.menuButton}>
+                        <Ionicons name="ellipsis-vertical" size={24} color="#1F2937" />
+                    </TouchableOpacity>
                 </View>
-                <CustomText style={styles.headerText}>
-                    {isEditMode ? 'Edit Recipe' : (params.extractedTitle ? 'Edit Extracted Recipe' : 'Create Recipe')}
-                </CustomText>
-                <CustomText style={styles.subHeader}>
-                    {isEditMode ? 'Make changes to your recipe' : (params.extractedTitle ? 'Review and edit the extracted recipe details' : 'Add your own recipe from scratch')}
-                </CustomText>
-                {(params.extractedTitle || isEditMode) && (
-                    <View style={styles.extractedIndicator}>
-                        <Ionicons name={isEditMode ? "create-outline" : "sparkles"} size={16} color="#6DA98C" />
-                        <CustomText style={styles.extractedText}>
-                            {isEditMode ? 'Editing existing recipe' : 'AI extracted from photo'}
-                        </CustomText>
-                    </View>
-                )}
             </View>
 
             {/* Content */}
@@ -266,134 +311,266 @@ export default function AddRecipeManualScreen() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Recipe Name Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="restaurant-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Recipe Name</CustomText>
-                    </View>
+                {/* Recipe Details Section */}
+                <View style={styles.card}>
+                    <CustomText style={styles.cardTitle}>Recipe Details</CustomText>
+                    
                     <TextInput 
                         style={styles.input} 
-                        placeholder="Enter your recipe name" 
-                        placeholderTextColor="#B0B0B0" 
+                        placeholder="Recipe Name"
+                        placeholderTextColor="#9CA3AF" 
                         value={title} 
                         onChangeText={setTitle}
                     />
-                </View>
-
-                {/* Basic Info Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="information-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Basic Information</CustomText>
-                    </View>
+                    
+                    <TextInput 
+                        style={[styles.input, styles.textArea]} 
+                        placeholder="Brief description..."
+                        placeholderTextColor="#9CA3AF" 
+                        value={description} 
+                        onChangeText={setDescription}
+                        multiline
+                        numberOfLines={3}
+                    />
+                    
                     <View style={styles.row}>
                         <View style={styles.halfInput}>
+                            <CustomText style={styles.label}>Cook Time (mins)</CustomText>
                             <TextInput 
                                 style={styles.input} 
-                                placeholder="Cook time (min)" 
-                                placeholderTextColor="#B0B0B0" 
-                                keyboardType="numeric" 
+                                placeholder="30"
+                                placeholderTextColor="#9CA3AF" 
+                                keyboardType="number-pad" 
                                 value={time} 
-                                onChangeText={setTime}
+                                onChangeText={(val) => {
+                                    // Only allow numeric input
+                                    const numericValue = val.replace(/[^0-9]/g, '');
+                                    setTime(numericValue);
+                                }}
                             />
                         </View>
                         <View style={styles.halfInput}>
+                            <CustomText style={styles.label}>Servings</CustomText>
                             <TextInput 
                                 style={styles.input} 
-                                placeholder="Servings" 
-                                placeholderTextColor="#B0B0B0" 
-                                keyboardType="numeric" 
+                                placeholder="4"
+                                placeholderTextColor="#9CA3AF" 
+                                keyboardType="number-pad" 
                                 value={servings} 
-                                onChangeText={setServings}
+                                onChangeText={(val) => {
+                                    // Only allow numeric input
+                                    const numericValue = val.replace(/[^0-9]/g, '');
+                                    setServings(numericValue);
+                                }}
                             />
                         </View>
                     </View>
-                    <View style={styles.tagsContainer}>
-                        {tags.map((tag, index) => (
-                            <View key={index} style={styles.tagChip}>
-                                <CustomText style={styles.tagText}>{tag}</CustomText>
-                                <TouchableOpacity onPress={() => removeTag(tag)}>
-                                    <Ionicons name="close-circle" size={16} color="#EF4444" />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                        <TextInput
-                            style={styles.newTagInput}
-                            placeholder="Add tags (press Enter to add)"
-                            placeholderTextColor="#B0B0B0"
-                            value={newTag}
-                            onChangeText={setNewTag}
-                            onSubmitEditing={addTag}
-                            returnKeyType="done"
+                </View>
+
+                {/* Recipe Icon Section */}
+                <View style={styles.card}>
+                    <TouchableOpacity 
+                        style={styles.cardHeader}
+                        onPress={() => setIconSectionExpanded(!iconSectionExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <CustomText style={styles.cardTitle}>Recipe Icon</CustomText>
+                        <Ionicons 
+                            name={iconSectionExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color="#9CA3AF" 
                         />
-                    </View>
+                    </TouchableOpacity>
+                    
+                    {iconSectionExpanded && (
+                        <View style={styles.iconSelector}>
+                            <FlatList
+                                data={POPULAR_ICONS}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.iconScrollContent}
+                                keyExtractor={(item, index) => `icon-${index}`}
+                                renderItem={({ item, index }) => {
+                                    const isSelected = selectedIcon ? 
+                                        (selectedIcon.name === item.name && selectedIcon.library === item.library) :
+                                        (currentIcon.name === item.name && currentIcon.library === item.library);
+                                    
+                                    return (
+                                        <TouchableOpacity
+                                            style={styles.iconOption}
+                                            onPress={() => setSelectedIcon(item)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View style={[
+                                                styles.iconOptionCircle, 
+                                                { 
+                                                    backgroundColor: item.backgroundColor,
+                                                    borderWidth: isSelected ? 3 : 1,
+                                                    borderColor: isSelected ? '#6DA98C' : '#E5E7EB',
+                                                }
+                                            ]}>
+                                                {item.library === 'MaterialCommunityIcons' ? (
+                                                    <MaterialCommunityIcons 
+                                                        name={item.name as any} 
+                                                        size={32} 
+                                                        color={isSelected ? item.iconColor : '#D1D5DB'} 
+                                                    />
+                                                ) : (
+                                                    <Ionicons 
+                                                        name={item.name as any} 
+                                                        size={32} 
+                                                        color={isSelected ? item.iconColor : '#D1D5DB'} 
+                                                    />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                            />
+                        </View>
+                    )}
+                </View>
+
+                {/* Tags Section */}
+                <View style={styles.card}>
+                    <TouchableOpacity 
+                        style={styles.cardHeader}
+                        onPress={() => setTagsSectionExpanded(!tagsSectionExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <CustomText style={styles.cardTitle}>Tags</CustomText>
+                        <Ionicons 
+                            name={tagsSectionExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color="#9CA3AF" 
+                        />
+                    </TouchableOpacity>
+                    
+                    {tagsSectionExpanded && (
+                        <View style={styles.tagsContainer}>
+                            {tags.length > 0 && (
+                                <View style={styles.tagsList}>
+                                    {tags.map((tag, index) => (
+                                        <View key={index} style={styles.tagChip}>
+                                            <CustomText style={styles.tagText}>{tag}</CustomText>
+                                            <TouchableOpacity onPress={() => removeTag(tag)}>
+                                                <Ionicons name="close-circle" size={16} color="#6B7280" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                            <View style={styles.tagInputRow}>
+                                <TextInput
+                                    style={styles.tagInput}
+                                    placeholder="Add tag (press Enter)"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={newTag}
+                                    onChangeText={setNewTag}
+                                    onSubmitEditing={addTag}
+                                    returnKeyType="done"
+                                />
+                            </View>
+                        </View>
+                    )}
                 </View>
 
                 {/* Ingredients Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="nutrition-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Ingredients</CustomText>
-                    </View>
-                    {ingredients.map((ing, idx) => (
-                        <View key={idx} style={styles.dynamicRow}>
-                            <TextInput
-                                style={[styles.input, styles.dynamicInput]}
-                                placeholder={`Ingredient ${idx + 1}`}
-                                placeholderTextColor="#B0B0B0"
-                                value={ing}
-                                onChangeText={val => updateIngredient(idx, val)}
-                            />
-                            {ingredients.length > 1 && (
-                                <TouchableOpacity 
-                                    style={styles.removeButton} 
-                                    onPress={() => removeIngredient(idx)}
-                                >
-                                    <Ionicons name="close-circle" size={24} color="#EF4444" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ))}
-                    <TouchableOpacity style={styles.addButton} onPress={addIngredient}>
-                        <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.addButtonText}>Add Ingredient</CustomText>
+                <View style={styles.card}>
+                    <TouchableOpacity 
+                        style={styles.cardHeader}
+                        onPress={() => setIngredientsExpanded(!ingredientsExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <CustomText style={styles.cardTitle}>Ingredients</CustomText>
+                        <Ionicons 
+                            name={ingredientsExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color="#9CA3AF" 
+                        />
                     </TouchableOpacity>
+                    
+                    {ingredientsExpanded && (
+                        <View>
+                            {ingredients.map((ing, idx) => (
+                                <View key={idx} style={styles.ingredientItem}>
+                                    <TextInput
+                                        style={styles.ingredientInput}
+                                        placeholder="Add ingredient"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={ing}
+                                        onChangeText={val => updateIngredient(idx, val)}
+                                        blurOnSubmit={false}
+                                    />
+                                    {ingredients.length > 1 && (
+                                        <TouchableOpacity 
+                                            style={styles.removeItemButton}
+                                            onPress={() => removeIngredient(idx)}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))}
+                            
+                            <TouchableOpacity style={styles.addButtonRow} onPress={addIngredient} activeOpacity={0.8}>
+                                <View style={styles.addButtonIcon}>
+                                    <Ionicons name="add" size={20} color="#6DA98C" />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
-                {/* Steps Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="list-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Instructions</CustomText>
-                    </View>
-                    {steps.map((step, idx) => (
-                        <View key={idx} style={styles.dynamicRow}>
-                            <View style={styles.stepNumber}>
-                                <CustomText style={styles.stepNumberText}>{idx + 1}</CustomText>
-                            </View>
-                            <TextInput
-                                style={[styles.input, styles.dynamicInput]}
-                                placeholder={`Step ${idx + 1}`}
-                                placeholderTextColor="#B0B0B0"
-                                value={step}
-                                onChangeText={val => updateStep(idx, val)}
-                                multiline
-                            />
-                            {steps.length > 1 && (
-                                <TouchableOpacity 
-                                    style={styles.removeButton} 
-                                    onPress={() => removeStep(idx)}
-                                >
-                                    <Ionicons name="close-circle" size={24} color="#EF4444" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ))}
-                    <TouchableOpacity style={styles.addButton} onPress={addStep}>
-                        <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.addButtonText}>Add Step</CustomText>
+                {/* Instructions Section */}
+                <View style={styles.card}>
+                    <TouchableOpacity 
+                        style={styles.cardHeader}
+                        onPress={() => setInstructionsExpanded(!instructionsExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <CustomText style={styles.cardTitle}>Instructions</CustomText>
+                        <Ionicons 
+                            name={instructionsExpanded ? "chevron-up" : "chevron-down"} 
+                            size={20} 
+                            color="#9CA3AF" 
+                        />
                     </TouchableOpacity>
+                    
+                    {instructionsExpanded && (
+                        <View>
+                            {steps.map((step, idx) => (
+                                <View key={idx} style={styles.stepItem}>
+                                    <View style={styles.stepNumber}>
+                                        <CustomText style={styles.stepNumberText}>{idx + 1}</CustomText>
+                                    </View>
+                                    <TextInput
+                                        style={styles.stepInput}
+                                        placeholder="Add instruction step"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={step}
+                                        onChangeText={val => updateStep(idx, val)}
+                                        multiline
+                                        blurOnSubmit={false}
+                                    />
+                                    {steps.length > 1 && (
+                                        <TouchableOpacity 
+                                            style={styles.removeItemButton}
+                                            onPress={() => removeStep(idx)}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))}
+                            
+                            <TouchableOpacity style={styles.addButtonRow} onPress={addStep} activeOpacity={0.8}>
+                                <View style={styles.addButtonIcon}>
+                                    <Ionicons name="add" size={20} color="#6DA98C" />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 {/* Save Button */}
@@ -401,15 +578,12 @@ export default function AddRecipeManualScreen() {
                     style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
                     onPress={handleSaveRecipe} 
                     disabled={saving}
-                    activeOpacity={0.92}
+                    activeOpacity={0.9}
                 >
                     {saving ? (
-                        <ActivityIndicator color="#fff" size="small" />
+                        <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
-                        <>
-                            <Ionicons name="save-outline" size={20} color="#fff" />
-                            <CustomText style={styles.saveButtonText}>Save Recipe</CustomText>
-                        </>
+                        <CustomText style={styles.saveButtonText}>Save Recipe</CustomText>
                     )}
                 </TouchableOpacity>
             </ScrollView>
@@ -420,166 +594,223 @@ export default function AddRecipeManualScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
+        backgroundColor: '#F9FAFB',
     },
     header: {
         backgroundColor: '#F3F0FF',
-        paddingTop: 60,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
     },
-    headerContent: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        justifyContent: 'space-between',
     },
     backButton: {
-        marginRight: 8,
         padding: 4,
     },
-    logoText: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#222',
-        letterSpacing: 0.5,
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2937',
+        letterSpacing: -0.3,
     },
-    headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
-        letterSpacing: -0.5,
-    },
-    subHeader: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
-    },
-    extractedIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 8,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        backgroundColor: '#E0F2FE',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
-    },
-    extractedText: {
-        color: '#6DA98C',
-        fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 6,
+    menuButton: {
+        padding: 4,
     },
     scrollView: {
         flex: 1,
-        backgroundColor: '#F7F7FA',
     },
     scrollContent: {
+        padding: 20,
         paddingBottom: 100,
-        marginTop: 24,
     },
-    section: {
-        marginBottom: 24,
-        paddingHorizontal: 18,
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    sectionHeader: {
+    cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 12,
     },
-    sectionTitle: {
-        fontSize: 18,
+    cardTitle: {
+        fontSize: 16,
         fontWeight: '700',
-        color: '#222',
-        marginLeft: 8,
-        letterSpacing: -0.3,
+        color: '#1F2937',
+        letterSpacing: -0.2,
+    },
+    input: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 12,
+    },
+    textArea: {
+        minHeight: 80,
+        textAlignVertical: 'top',
+        paddingTop: 12,
     },
     row: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        gap: 12,
     },
     halfInput: {
-        width: '48%',
+        flex: 1,
     },
-    input: {
-        backgroundColor: '#fff',
+    label: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginBottom: 6,
+    },
+    iconSelector: {
+        marginTop: 12,
+        paddingVertical: 8,
+    },
+    iconScrollContent: {
+        paddingRight: 20,
+        gap: 12,
+    },
+    iconOption: {
+        marginRight: 12,
+    },
+    iconOptionCircle: {
+        width: 56,
+        height: 56,
         borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
-        color: '#222',
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    dynamicRow: {
+    tagsContainer: {
+        marginTop: 8,
+    },
+    tagsList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 12,
+        gap: 8,
+    },
+    tagChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        gap: 6,
+    },
+    tagText: {
+        fontSize: 13,
+        fontWeight: '500',
+        color: '#6B7280',
+    },
+    tagInputRow: {
+        marginTop: 8,
+    },
+    tagInput: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    ingredientItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 8,
+    },
+    ingredientInput: {
+        flex: 1,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    stepItem: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         marginBottom: 12,
-    },
-    dynamicInput: {
-        flex: 1,
-        marginBottom: 0,
+        gap: 12,
     },
     stepNumber: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#6DA98C',
-        justifyContent: 'center',
+        backgroundColor: '#1F2937',
         alignItems: 'center',
-        marginRight: 12,
+        justifyContent: 'center',
         marginTop: 2,
     },
     stepNumberText: {
-        color: '#fff',
-        fontSize: 14,
+        color: '#FFFFFF',
+        fontSize: 13,
         fontWeight: '700',
     },
-    removeButton: {
-        marginLeft: 8,
+    stepInput: {
+        flex: 1,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        minHeight: 44,
+        textAlignVertical: 'top',
+    },
+    removeItemButton: {
+        padding: 4,
         marginTop: 2,
     },
-    addButton: {
+    addButtonRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F0F9FF',
-        borderRadius: 12,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
-        marginTop: 4,
+        marginTop: 12,
     },
-    addButtonText: {
-        color: '#6DA98C',
-        fontSize: 16,
-        fontWeight: '600',
-        marginLeft: 8,
+    addButtonIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 2,
+        borderColor: '#6DA98C',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     saveButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#6DA98C',
+        backgroundColor: '#1F2937',
         borderRadius: 16,
         paddingVertical: 16,
-        marginHorizontal: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginTop: 8,
-        shadowColor: '#6DA98C',
+        shadowColor: '#1F2937',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
@@ -589,57 +820,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#9CA3AF',
     },
     saveButtonText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
-        marginLeft: 8,
-    },
-    tagsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginTop: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        minHeight: 50,
-    },
-    tagChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F0F9FF',
-        borderRadius: 12,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        marginVertical: 2,
-        marginHorizontal: 4,
-        borderWidth: 1,
-        borderColor: '#E0F2FE',
-    },
-    tagText: {
-        color: '#6DA98C',
-        fontSize: 14,
-        fontWeight: '600',
-        marginRight: 6,
-    },
-    newTagInput: {
-        flex: 1,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        color: '#FFFFFF',
         fontSize: 16,
-        color: '#222',
-        borderRadius: 12,
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-        marginVertical: 2,
-        marginHorizontal: 4,
-        minWidth: 120,
+        fontWeight: '700',
     },
-}); 
+});

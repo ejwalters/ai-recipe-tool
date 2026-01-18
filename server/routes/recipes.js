@@ -7,25 +7,33 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 // POST /recipes/add
 router.post('/add', async (req, res) => {
-    const { user_id, title, time, tags, ingredients, steps } = req.body;
+    const { user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color } = req.body;
     if (!user_id || !title || !ingredients || !steps) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Compute icon configuration based on title and tags
-    const iconConfig = getRecipeIconConfig(title, tags || []);
+    // Use provided icon config or compute based on title and tags
+    const iconConfig = (icon_library && icon_name) 
+        ? { icon_library, icon_name, icon_bg_color: icon_bg_color || '#F3F4F6', icon_color: icon_color || '#9CA3AF' }
+        : getRecipeIconConfig(title, tags || []);
+    
+    const insertData = { 
+        user_id, 
+        title, 
+        time, 
+        tags, 
+        ingredients, 
+        steps,
+        ...iconConfig
+    };
+    
+    // Add optional fields if provided
+    if (description !== undefined) insertData.description = description;
+    if (servings !== undefined) insertData.servings = servings;
     
     const { data, error } = await supabase
         .from('recipes')
-        .insert([{ 
-            user_id, 
-            title, 
-            time, 
-            tags, 
-            ingredients, 
-            steps,
-            ...iconConfig
-        }])
+        .insert([insertData])
         .select()
         .single();
     if (error) return res.status(500).json({ error: error.message });
@@ -35,7 +43,7 @@ router.post('/add', async (req, res) => {
 // PUT /recipes/:id
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { user_id, title, time, tags, ingredients, steps } = req.body;
+    const { user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color } = req.body;
     
     if (!user_id || !title || !ingredients || !steps) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -56,20 +64,28 @@ router.put('/:id', async (req, res) => {
         return res.status(403).json({ error: 'You can only edit your own recipes' });
     }
 
-    // Compute icon configuration based on updated title and tags
-    const iconConfig = getRecipeIconConfig(title, tags || []);
+    // Use provided icon config or compute based on updated title and tags
+    const iconConfig = (icon_library && icon_name) 
+        ? { icon_library, icon_name, icon_bg_color: icon_bg_color || '#F3F4F6', icon_color: icon_color || '#9CA3AF' }
+        : getRecipeIconConfig(title, tags || []);
+    
+    const updateData = { 
+        title, 
+        time, 
+        tags, 
+        ingredients, 
+        steps,
+        ...iconConfig
+    };
+    
+    // Add optional fields if provided (allow null/empty to clear them)
+    if (description !== undefined) updateData.description = description || null;
+    if (servings !== undefined) updateData.servings = servings || null;
     
     // Update the recipe (including icon config)
     const { data, error } = await supabase
         .from('recipes')
-        .update({ 
-            title, 
-            time, 
-            tags, 
-            ingredients, 
-            steps,
-            ...iconConfig
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
