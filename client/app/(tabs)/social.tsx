@@ -11,7 +11,7 @@ import {
   Image,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -264,6 +264,7 @@ const FeedLoadingSkeleton = () => {
 
 export default function SocialScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [activeSegment, setActiveSegment] = useState<'for_you' | 'following' | 'trending'>('for_you');
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -381,6 +382,8 @@ export default function SocialScreen() {
     }
   }, [activeSegment, loadFeed]);
 
+  const searchRefreshRef = useRef(false);
+
   // Don't reload on focus if feed is already loaded
   useFocusEffect(
     useCallback(() => {
@@ -389,7 +392,34 @@ export default function SocialScreen() {
       if ((activeSegment === 'for_you' || activeSegment === 'following' || activeSegment === 'trending') && !feedLoadedRef.current) {
         loadFeed(true);
       }
-    }, [activeSegment, loadFeed])
+
+      // Refresh search results if search is active (user navigated back from profile)
+      // This updates follow status and follower counts after following/unfollowing from profile screen
+      if (showSearch && searchTerm.trim()) {
+        // Only refresh if we haven't already refreshed in this focus cycle
+        if (!searchRefreshRef.current) {
+          searchRefreshRef.current = true;
+          const refreshSearch = async () => {
+            try {
+              const results = await socialService.searchUsers(searchTerm.trim());
+              setSearchResults(Array.isArray(results) ? results : []);
+            } catch (error: any) {
+              console.log('[social] search refresh error', error);
+              // Silently fail - don't show error to user since they're just returning to the screen
+            }
+          };
+          // Small delay to ensure navigation is complete
+          const timeoutId = setTimeout(refreshSearch, 150);
+          return () => {
+            clearTimeout(timeoutId);
+            searchRefreshRef.current = false;
+          };
+        }
+      } else {
+        // Reset refresh flag when search is not active
+        searchRefreshRef.current = false;
+      }
+    }, [activeSegment, loadFeed, showSearch, searchTerm])
   );
 
   // Removed - handleRefreshFeed now directly calls loadFeed
@@ -853,24 +883,37 @@ export default function SocialScreen() {
       return (
         <TouchableOpacity
           style={styles.userRow}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
           onPress={() => router.push({ pathname: '/user-profile', params: { user_id: item.id } })}
         >
           <View style={styles.userInfo}>
-            <UserAvatar avatarUrl={item.avatar_url} size={64} />
+            <UserAvatar avatarUrl={item.avatar_url} size={56} />
             <View style={styles.userDetails}>
-              <CustomText style={styles.userName}>{displayName}</CustomText>
-              <CustomText style={styles.userHandle}>
-                @{username}{profession ? ` · ${profession}` : ''}
+              <CustomText style={styles.userName} numberOfLines={1}>
+                {displayName}
               </CustomText>
+              <CustomText style={styles.userHandle} numberOfLines={1}>
+                @{username}
+              </CustomText>
+              {profession && (
+                <CustomText style={styles.userProfession} numberOfLines={1}>
+                  {profession}
+                </CustomText>
+              )}
               <View style={styles.userStats}>
-                <CustomText style={styles.userStatText}>
-                  {followerCount} Followers
-                </CustomText>
-                <CustomText style={styles.userStatDivider}> · </CustomText>
-                <CustomText style={styles.userStatText}>
-                  {recipeCount} Recipes
-                </CustomText>
+                <View style={styles.userStatItem}>
+                  <Ionicons name="people-outline" size={12} color="#9CA3AF" />
+                  <CustomText style={styles.userStatText}>
+                    {followerCount} {followerCount === '1' ? 'follower' : 'followers'}
+                  </CustomText>
+                </View>
+                <View style={styles.userStatDivider} />
+                <View style={styles.userStatItem}>
+                  <Ionicons name="book-outline" size={12} color="#9CA3AF" />
+                  <CustomText style={styles.userStatText}>
+                    {recipeCount} {recipeCount === '1' ? 'recipe' : 'recipes'}
+                  </CustomText>
+                </View>
               </View>
             </View>
           </View>
@@ -881,6 +924,7 @@ export default function SocialScreen() {
               handleFollowToggle(item);
             }}
             activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <CustomText
               style={[
@@ -897,6 +941,9 @@ export default function SocialScreen() {
     [handleFollowToggle, router]
   );
 
+  // Tab bar height is 100, plus safe area bottom inset
+  const bottomPadding = 100 + insets.bottom;
+  
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
@@ -998,7 +1045,7 @@ export default function SocialScreen() {
               data={searchResults}
               keyExtractor={item => item.id}
               renderItem={renderUserRow}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             />
@@ -1021,7 +1068,7 @@ export default function SocialScreen() {
               data={feed}
               keyExtractor={item => item.id}
               renderItem={({ item, index }) => renderFeedItem({ item, index })}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[styles.listContent, { paddingBottom: bottomPadding }]}
               refreshControl={
                 <RefreshControl
                   refreshing={feedRefreshing}
@@ -1321,61 +1368,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    padding: 16,
     borderRadius: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: 'rgba(0, 0, 0, 0.05)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 16,
+    marginRight: 12,
   },
   userDetails: {
-    marginLeft: 16,
+    marginLeft: 12,
     flex: 1,
   },
   userName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: -0.2,
     lineHeight: 22,
   },
   userHandle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 4,
+    letterSpacing: -0.1,
+  },
+  userProfession: {
+    fontSize: 12,
+    color: '#9CA3AF',
     fontWeight: '400',
     marginBottom: 6,
-    letterSpacing: -0.1,
   },
   userStats: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  userStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   userStatText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
-    fontWeight: '400',
+    fontWeight: '500',
   },
   userStatDivider: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginHorizontal: 4,
+    width: 1,
+    height: 12,
+    backgroundColor: '#E5E7EB',
   },
   followButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#4CAF50',
-    minWidth: 90,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#10B981',
+    minWidth: 88,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1385,10 +1445,10 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   followButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
   followButtonTextActive: {
     color: '#6B7280',

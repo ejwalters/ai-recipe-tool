@@ -506,7 +506,24 @@ router.get('/feed', async (req, res) => {
     let recipes = [];
 
     if (feedType === 'following') {
-      // FOLLOWING: Only recipes from users you follow
+      /**
+       * FOLLOWING FEED ALGORITHM
+       * 
+       * Purpose: Show recipes from users you follow, ranked by popularity and recency
+       * 
+       * How it works:
+       * 1. Fetches recipes from users you follow (up to 500 for ranking pool)
+       * 2. Scores each recipe using Reddit's "hot" algorithm:
+       *    - Popularity: log10 of total favorites (log scale prevents old popular recipes from dominating)
+       *    - Recency: timestamp divided by 45000 (boosts newer content)
+       *    - Age penalty: small penalty (0.1) per day (gentle decay over time)
+       * 3. Sorts by score (highest first)
+       * 4. Diversifies: Limits each author to max 3 recipes, unless recipe is in top 10% by score
+       *    (This prevents one popular creator from dominating your feed while still allowing
+       *     exceptional recipes to break through)
+       * 5. Returns top recipes for the requested page
+       */
+      
       if (followeeIds.length === 0) {
         return res.json({
           recipes: [],
@@ -545,6 +562,8 @@ router.get('/feed', async (req, res) => {
         const createdTime = new Date(recipe.created_at).getTime();
         const ageInHours = (now - createdTime) / (1000 * 60 * 60);
         
+        // Reddit's "hot" algorithm: balances popularity and recency
+        // log10 prevents exponential growth from dominating, recency boost keeps fresh content relevant
         const recipeHotScore = Math.log10(Math.max(favoriteCount, 1) + 1) + 
                               (createdTime / 1000) / 45000 - 
                               (ageInHours / 24) * 0.1;
@@ -557,15 +576,16 @@ router.get('/feed', async (req, res) => {
 
       recipesWithScores.sort((a, b) => b.score - a.score);
 
-      // Diversify: Limit recipes per author
+      // Diversify: Limit recipes per author to prevent one creator from dominating
       const authorCountMap = new Map();
       const diversifiedRecipes = [];
-      const maxPerAuthor = 3;
+      const maxPerAuthor = 3; // Maximum recipes per author in feed
       
       for (const recipe of recipesWithScores) {
         const authorId = recipe.user_id;
         const authorCount = authorCountMap.get(authorId) || 0;
         
+        // Top 10% of recipes can break through diversification limit
         const scoreThreshold = recipesWithScores.length > 10 
           ? recipesWithScores[Math.floor(recipesWithScores.length * 0.1)].score 
           : recipe.score;
@@ -583,8 +603,26 @@ router.get('/feed', async (req, res) => {
       recipes = diversifiedRecipes;
 
     } else if (feedType === 'for_you') {
-      // FOR YOU: Discovery feed - mix of popular recipes and recipes from similar users
-      // Exclude recipes from users you already follow and your own recipes
+      /**
+       * FOR YOU FEED ALGORITHM
+       * 
+       * Purpose: Discovery feed showing recipes from users you DON'T follow
+       * 
+       * How it works:
+       * 1. Fetches all recent recipes (up to 1000 for ranking pool)
+       * 2. Filters out recipes from users you follow and your own recipes
+       *    (This ensures you discover new creators and content)
+       * 3. Scores for discovery (optimized for variety, not just popularity):
+       *    - Popularity: log10 of favorites × 0.7 (less weight than Following feed)
+       *    - Recency: timestamp divided by 45000 (boosts newer content)
+       *    - Age penalty: 0.15 per day (stronger penalty to favor fresh content)
+       *    (The lower popularity weight and higher age penalty create more variety
+       *     and help newer creators get discovered)
+       * 4. Stronger diversification: Max 2 recipes per author (ensures maximum variety)
+       *    (Unlike Following feed, there's no exception for top recipes - pure diversification)
+       * 5. Returns top recipes for discovery
+       */
+      
       const excludeUserIds = [req.user.id, ...followeeIds];
       
       // Get popular recipes from non-followed users
@@ -629,8 +667,8 @@ router.get('/feed', async (req, res) => {
         const createdTime = new Date(recipe.created_at).getTime();
         const ageInHours = (now - createdTime) / (1000 * 60 * 60);
         
-        // Discovery score: favor recipes with some engagement but not too old
-        // Boost newer recipes and recipes with moderate engagement
+        // Discovery score: lower popularity weight (0.7 vs 1.0) and higher age penalty (0.15 vs 0.1)
+        // This creates more variety and helps newer creators get discovered
         const discoveryScore = Math.log10(Math.max(favoriteCount, 1) + 1) * 0.7 + 
                               (createdTime / 1000) / 45000 - 
                               (ageInHours / 24) * 0.15;
@@ -643,15 +681,16 @@ router.get('/feed', async (req, res) => {
 
       recipesWithScores.sort((a, b) => b.score - a.score);
 
-      // Strong diversification for discovery feed
+      // Strong diversification for discovery feed - max 2 per author (no exceptions)
       const authorCountMap = new Map();
       const diversifiedRecipes = [];
-      const maxPerAuthor = 2; // Stricter limit for discovery
+      const maxPerAuthor = 2; // Stricter limit for discovery ensures maximum variety
       
       for (const recipe of recipesWithScores) {
         const authorId = recipe.user_id;
         const authorCount = authorCountMap.get(authorId) || 0;
         
+        // No score threshold exception - pure diversification for discovery
         if (authorCount < maxPerAuthor) {
           diversifiedRecipes.push(recipe);
           authorCountMap.set(authorId, authorCount + 1);
@@ -665,8 +704,34 @@ router.get('/feed', async (req, res) => {
       recipes = diversifiedRecipes;
 
     } else if (feedType === 'trending') {
-      // TRENDING: Algorithmically trending recipes based on engagement velocity
-      // Recipes that are gaining favorites quickly in recent time
+      /**
+       * TRENDING FEED ALGORITHM
+       * 
+       * Purpose: Show recipes that are gaining popularity quickly (high engagement velocity)
+       * 
+       * How it works:
+       * 1. Fetches all recent recipes (up to 1000 for ranking pool)
+       * 2. Calculates "engagement velocity" - how fast a recipe is gaining likes:
+       *    - Recent favorites: count of favorites received in last 24 hours
+       *    - Velocity ratio: recent favorites / total favorites (shows acceleration)
+       *    (A recipe with 10 recent favorites out of 12 total has high velocity,
+       *     meaning it's gaining traction quickly. A recipe with 50 recent out of 500 total
+       *     has lower velocity - popular but not trending upward)
+       * 3. Trending score combines multiple factors:
+       *    - Recent favorites × 2 (heaviest weight - shows current momentum)
+       *    - Total favorites × 0.5 (moderate weight - shows overall popularity)
+       *    - Velocity × 10 (multiplier - heavily boosts recipes with high acceleration)
+       *    - Recency boost: timestamp / 45000 (newer content preferred)
+       *    - Age penalty: 0.2 per day (penalizes old content more than other feeds)
+       * 4. Moderate diversification: Max 3 per author, or top 15% by score
+       *    (Less strict than For You to allow trending content to shine through)
+       * 5. Returns recipes with highest trending scores
+       * 
+       * Example: A new recipe that gets 20 likes in 24 hours will rank higher than
+       * an older recipe with 100 total likes but only 2 in the last day, because
+       * it's "trending" - gaining momentum quickly.
+       */
+      
       const fetchLimit = Math.min(limit * 10, 1000);
       const { data: allRecipes, error: recipeError } = await supabase
         .from('recipes')
@@ -697,15 +762,16 @@ router.get('/feed', async (req, res) => {
         const createdTime = new Date(recipe.created_at).getTime();
         const ageInHours = (now - createdTime) / (1000 * 60 * 60);
         
-        // Trending algorithm: prioritize recipes with high recent engagement
-        // Velocity = recent favorites / total favorites (if total > 0)
-        // Boost recipes that are gaining traction quickly
+        // Velocity: ratio of recent favorites to total (shows acceleration)
+        // High velocity = recipe is gaining traction quickly
         const velocity = favoriteCount > 0 ? recentFavorites / favoriteCount : 0;
-        const trendingScore = (recentFavorites * 2) + // Recent favorites weighted heavily
-                              (favoriteCount * 0.5) + // Total favorites
-                              (velocity * 10) + // Velocity boost
-                              (createdTime / 1000) / 45000 - // Recency boost
-                              (ageInHours / 24) * 0.2; // Age penalty
+        
+        // Trending score prioritizes momentum over absolute popularity
+        const trendingScore = (recentFavorites * 2) + // Recent favorites weighted heavily (current momentum)
+                              (favoriteCount * 0.5) + // Total favorites (moderate weight for popularity)
+                              (velocity * 10) + // Velocity boost (high multiplier for acceleration)
+                              (createdTime / 1000) / 45000 - // Recency boost (newer content preferred)
+                              (ageInHours / 24) * 0.2; // Age penalty (stronger than Following feed)
         
         return {
           ...recipe,
@@ -715,15 +781,16 @@ router.get('/feed', async (req, res) => {
 
       recipesWithScores.sort((a, b) => b.score - a.score);
 
-      // Moderate diversification for trending
+      // Moderate diversification for trending - allows trending content to shine through
       const authorCountMap = new Map();
       const diversifiedRecipes = [];
-      const maxPerAuthor = 3;
+      const maxPerAuthor = 3; // Same as Following feed
       
       for (const recipe of recipesWithScores) {
         const authorId = recipe.user_id;
         const authorCount = authorCountMap.get(authorId) || 0;
         
+        // Top 15% of recipes can break through diversification (more lenient than Following's 10%)
         const scoreThreshold = recipesWithScores.length > 10 
           ? recipesWithScores[Math.floor(recipesWithScores.length * 0.15)].score 
           : recipe.score;
