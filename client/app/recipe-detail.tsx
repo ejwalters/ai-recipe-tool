@@ -5,19 +5,21 @@ import {
   TouchableOpacity, 
   ScrollView, 
   Image, 
-  SafeAreaView, 
   Animated, 
   Easing, 
   Dimensions,
   ActivityIndicator,
   StatusBar,
   TextInput,
-  Alert
+  Alert,
+  Share
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
 import { supabase } from '../lib/supabase';
+import { getRecipeIconConfig } from '../utils/recipeIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Heart, HeartIcon, Book, BookIcon } from 'lucide-react-native';
 
@@ -114,6 +116,7 @@ interface RecipeDetailV2Props {
 
 export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDetailV2Props) {
   const router = propRouter || useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const isAIRecipe = params.isAI === '1' || params.message_id; // AI recipe if isAI=1 OR has message_id
   const fromRecentlyCooked = params.fromRecentlyCooked === '1';
@@ -800,6 +803,15 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     setShowEditModal(false);
   };
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${recipe.title}\n\n${recipe.time}\n\nIngredients:\n${ingredients.join('\n')}\n\nInstructions:\n${steps.join('\n')}`,
+        title: recipe.title,
+      });
+    } catch (_) { /* user cancelled or error */ }
+  };
+
   const handleEditRecipe = () => {
     // Open inline edit modal with current recipe data
     setEditTitle(recipe.title);
@@ -832,105 +844,106 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const ingredients = ensureArray(recipe?.ingredients, []);
   const steps = ensureArray(recipe?.steps, []);
 
+  const iconConfig = getRecipeIconConfig(recipe?.title || '', tags, 0, recipe);
+  const TAG_COLORS = [
+    { bg: '#FEF3C7', text: '#92400E' },
+    { bg: '#D1FAE5', text: '#065F46' },
+    { bg: '#E1D5FF', text: '#5B21B6' },
+    { bg: '#E6EEFF', text: '#1E40AF' },
+    { bg: '#FFE5D0', text: '#9A3412' },
+  ];
+  const getTagStyle = (idx: number) => TAG_COLORS[idx % TAG_COLORS.length];
+
   if (loading || !recipe) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#fff" />
+        <StatusBar barStyle="dark-content" />
+        <ActivityIndicator size="large" color="#256D85" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <StatusBar barStyle="dark-content" />
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Header with gradient background */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => {
-              router.back();
-            }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+      {/* Hero - prominent recipe icon */}
+      <View style={[styles.heroSection, { backgroundColor: iconConfig.backgroundColor, paddingTop: insets.top + 12 }]}>
+        <View style={styles.heroIconWrapper}>
+          <View style={styles.heroIcon}>
+            {iconConfig.library === 'MaterialCommunityIcons' ? (
+              <MaterialCommunityIcons name={iconConfig.name as any} size={48} color={iconConfig.iconColor} />
+            ) : (
+              <Ionicons name={iconConfig.name as any} size={48} color={iconConfig.iconColor} />
+            )}
+          </View>
+        </View>
+        <View style={[styles.floatingActions, { top: insets.top + 8 }]}>
+          <TouchableOpacity style={styles.floatingBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="arrow-back" size={24} color="#1F2937" />
           </TouchableOpacity>
-          
-          {/* Show save button for unsaved AI recipes */}
-          {isAIRecipe && !saved && (
-            <TouchableOpacity 
-              style={styles.saveButton} 
-              onPress={handleSaveRecipe}
-              disabled={saving}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Book color="#fff" size={24} />
-            </TouchableOpacity>
-          )}
-          
-          {/* Show saved indicator for AI recipes that have been saved */}
-          {isAIRecipe && saved && (
-            <View style={styles.savedIndicator}>
-              <BookIcon color="#48BB78" size={24} />
-            </View>
-          )}
-          
-
-          
-          {/* Show favorite button only for non-AI recipes (never for AI recipes) */}
           {!isAIRecipe && (
-            <TouchableOpacity 
-              style={styles.favoriteButton} 
-              onPress={handleToggleFavorite}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              {favorited ? (
-                <HeartIcon color="#FF6B6B" size={24} />
-              ) : (
-                <Heart color="#fff" size={24} />
-              )}
-            </TouchableOpacity>
-          )}
-
-          {/* Show edit button for recipe owner */}
-          {!isAIRecipe && recipe.user_id === userId && (
-            <TouchableOpacity 
-              style={styles.editButton} 
-              onPress={handleEditRecipe}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="create-outline" size={24} color="#fff" />
+            <TouchableOpacity style={[styles.floatingBtn, { position: 'absolute', right: 20 }]} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              {favorited ? <HeartIcon color="#E4576A" size={24} /> : <Heart color="#1F2937" size={24} />}
             </TouchableOpacity>
           )}
         </View>
-        
-        <View style={styles.recipeInfo}>
-          <CustomText style={styles.recipeTitle}>{recipe.title}</CustomText>
-          <View style={styles.recipeMeta}>
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={16} color="#fff" />
-              <CustomText style={styles.metaText}>{recipe.time}</CustomText>
-            </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="restaurant-outline" size={16} color="#fff" />
-              <CustomText style={styles.metaText}>{ingredients.length} ingredients</CustomText>
-            </View>
+      </View>
+
+      {/* Content card - white, rounded top */}
+      <View style={styles.contentCard}>
+        <CustomText style={styles.detailTitle}>{recipe.title}</CustomText>
+        <View style={styles.detailMetaRow}>
+          <View style={styles.detailMetaItem}>
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <CustomText style={styles.detailMetaText}>{recipe.time}</CustomText>
           </View>
-          
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.tagsContainer}
-          >
-            {tags.map((tag: string, idx: number) => (
-              <View key={idx} style={styles.tag}>
-                <CustomText style={styles.tagText}>{tag}</CustomText>
-              </View>
-            ))}
+          <View style={styles.detailMetaItem}>
+            <Ionicons name="restaurant-outline" size={16} color="#6B7280" />
+            <CustomText style={styles.detailMetaText}>{ingredients.length} ingredients</CustomText>
+          </View>
+        </View>
+        {tags.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.detailTags}>
+            {tags.map((tag: string, idx: number) => {
+              const tagStyle = getTagStyle(idx);
+              return (
+                <View key={idx} style={[styles.detailTag, { backgroundColor: tagStyle.bg }]}>
+                  <CustomText style={[styles.detailTagText, { color: tagStyle.text }]}>{tag}</CustomText>
+                </View>
+              );
+            })}
           </ScrollView>
+        )}
+        <View style={styles.detailActions}>
+            {!isAIRecipe && recipe.user_id === userId && (
+              <TouchableOpacity 
+                style={styles.detailActionBtn} 
+                onPress={handleEditRecipe}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="create-outline" size={18} color="#256D85" />
+                <CustomText style={styles.detailActionBtnText}>Edit</CustomText>
+              </TouchableOpacity>
+            )}
+            {isAIRecipe && !saved && (
+              <TouchableOpacity 
+                style={styles.detailActionBtnPrimary} 
+                onPress={handleSaveRecipe}
+                disabled={saving}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Book color="#fff" size={18} />
+                <CustomText style={styles.detailActionBtnPrimaryText}>Save to collection</CustomText>
+              </TouchableOpacity>
+            )}
+            {isAIRecipe && saved && (
+              <View style={styles.detailActionBtnSaved}>
+                <BookIcon color="#256D85" size={18} />
+                <CustomText style={styles.detailActionBtnSavedText}>Saved</CustomText>
+              </View>
+            )}
         </View>
       </View>
 
@@ -974,7 +987,11 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         </Animated.View>
       )}
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Cooking Timer */}
         <Animated.View 
           style={[
@@ -1001,7 +1018,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         {/* Ingredients Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="list-outline" size={20} color="#2D3748" />
+            <Ionicons name="list-outline" size={20} color="#9CA3AF" />
             <CustomText style={styles.sectionTitle}>Ingredients</CustomText>
             <CustomText style={styles.sectionSubtitle}>
               {checkedIngredients.filter(Boolean).length} of {ingredients.length} gathered
@@ -1043,7 +1060,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         {/* Steps Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="footsteps-outline" size={20} color="#2D3748" />
+            <Ionicons name="footsteps-outline" size={20} color="#9CA3AF" />
             <CustomText style={styles.sectionTitle}>Instructions</CustomText>
             <CustomText style={styles.sectionSubtitle}>
               Follow along step by step
@@ -1105,7 +1122,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         {/* AI Recipe Modification Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="sparkles-outline" size={20} color="#2D3748" />
+            <Ionicons name="sparkles-outline" size={20} color="#9CA3AF" />
             <CustomText style={styles.sectionTitle}>AI Recipe Modifier</CustomText>
             <CustomText style={styles.sectionSubtitle}>
               Get AI suggestions to modify this recipe
@@ -1117,7 +1134,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             onPress={() => setShowModificationSection(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="sparkles" size={20} color="#667EEA" />
+            <Ionicons name="sparkles" size={20} color="#256D85" />
             <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
           </TouchableOpacity>
         </View>
@@ -1515,57 +1532,234 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#F4F5FB',
+  },
+  heroSection: {
+    paddingBottom: 80,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  heroIconWrapper: {
+    marginTop: 8,
+  },
+  heroIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0,0,0,0.1)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  floatingActions: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  floatingBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  contentCard: {
+    backgroundColor: '#fff',
+    marginTop: -48,
+    marginHorizontal: 20,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  detailTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 12,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+  },
+  detailMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    marginBottom: 16,
+  },
+  detailMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  detailMetaText: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  detailTags: {
+    marginBottom: 20,
+  },
+  detailTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  detailTagText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  detailActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  detailActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  detailActionBtnIcon: {
+    paddingHorizontal: 12,
+  },
+  detailActionBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#256D85',
+  },
+  detailActionBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#1B5B6B',
+  },
+  detailActionBtnPrimaryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  detailActionBtnSaved: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F1',
+  },
+  detailActionBtnSavedText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#256D85',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#667EEA',
+    backgroundColor: '#F4F5FB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#667EEA',
+    backgroundColor: '#F4F5FB',
     paddingTop: 20,
-    paddingBottom: 30,
+    paddingBottom: 24,
     paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  backButton: {
+  headerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    gap: 6,
   },
-  favoriteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
+  headerActionsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
   },
-  saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
+  actionChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
   },
-  savedIndicator: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
+  actionChipLabel: {
+    color: '#1F2937',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionChipPrimary: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#0D3D4B',
+    shadowColor: '#0D3D4B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionChipPrimaryLabel: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionChipSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#E6F4F1',
+  },
+  actionChipSuccessLabel: {
+    color: '#256D85',
+    fontSize: 14,
+    fontWeight: '600',
   },
   saveRecipeContainer: {
     paddingHorizontal: 20,
@@ -1646,10 +1840,26 @@ const styles = StyleSheet.create({
   recipeInfo: {
     alignItems: 'flex-start',
   },
+  recipeInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recipeIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  recipeInfoContent: {
+    flex: 1,
+  },
   recipeTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#fff',
+    color: '#1E293B',
     marginBottom: 8,
     lineHeight: 34,
   },
@@ -1663,24 +1873,62 @@ const styles = StyleSheet.create({
     marginRight: 20,
   },
   metaText: {
-    color: '#fff',
+    color: '#9CA3AF',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     marginLeft: 4,
   },
   tagsContainer: {
     marginBottom: 8,
   },
   tag: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     marginRight: 8,
   },
   tagText: {
-    color: '#fff',
+    color: '#6B7280',
     fontSize: 12,
+    fontWeight: '500',
+  },
+  recipeActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  recipeActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  recipeActionText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  recipeActionTextActive: {
+    color: '#FF6B6B',
+  },
+  aiSavedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(72, 187, 120, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  aiSavedBadgeText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
   progressContainer: {
@@ -1699,7 +1947,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#48BB78',
+    backgroundColor: '#256D85',
     borderRadius: 3,
   },
   progressText: {
@@ -1712,22 +1960,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timerContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    padding: 24,
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   cookButton: {
-    backgroundColor: '#48BB78',
-    borderRadius: 16,
+    backgroundColor: '#1B5B6B',
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 24,
-    shadowColor: '#48BB78',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   cookButtonActive: {
     backgroundColor: '#E53E3E',
@@ -1753,24 +2012,26 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2D3748',
+    color: '#1E293B',
     marginLeft: 8,
     flex: 1,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#718096',
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   ingredientsList: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
   },
   ingredientItem: {
     flexDirection: 'row',
@@ -1797,8 +2058,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ingredientCheckboxChecked: {
-    backgroundColor: '#48BB78',
-    borderColor: '#48BB78',
+    backgroundColor: '#256D85',
+    borderColor: '#256D85',
   },
   ingredientText: {
     fontSize: 16,
@@ -1812,13 +2073,15 @@ const styles = StyleSheet.create({
   },
   stepsList: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: 'rgba(15, 23, 42, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
   },
   stepItem: {
     marginBottom: 16,
@@ -1845,7 +2108,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stepNumberCompleted: {
-    backgroundColor: '#48BB78',
+    backgroundColor: '#256D85',
   },
   stepNumberText: {
     fontSize: 14,
@@ -1880,8 +2143,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stepCheckboxChecked: {
-    backgroundColor: '#48BB78',
-    borderColor: '#48BB78',
+    backgroundColor: '#256D85',
+    borderColor: '#256D85',
   },
   bottomSpacing: {
     height: 40,
@@ -1897,7 +2160,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modifyButtonText: {
-    color: '#667EEA',
+    color: '#256D85',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

@@ -1,17 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, FlatList } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { recipeStore } from '../lib/recipeStore';
+import { getRecipeIconConfig, IconConfig } from '../utils/recipeIcons';
+
+const POPULAR_ICONS: IconConfig[] = [
+    { library: 'MaterialCommunityIcons', name: 'food-variant', backgroundColor: '#FFF8DC', iconColor: '#F4C430' },
+    { library: 'MaterialCommunityIcons', name: 'food-drumstick', backgroundColor: '#FFE0E6', iconColor: '#E91E63' },
+    { library: 'MaterialCommunityIcons', name: 'food-steak', backgroundColor: '#FFCDD2', iconColor: '#C62828' },
+    { library: 'MaterialCommunityIcons', name: 'pizza', backgroundColor: '#FFE5D0', iconColor: '#FF5722' },
+    { library: 'MaterialCommunityIcons', name: 'cupcake', backgroundColor: '#F3E5F5', iconColor: '#9C27B0' },
+    { library: 'MaterialCommunityIcons', name: 'bread-slice', backgroundColor: '#FFF8DC', iconColor: '#FBC02D' },
+    { library: 'MaterialCommunityIcons', name: 'ice-cream', backgroundColor: '#E1F5FE', iconColor: '#0288D1' },
+    { library: 'MaterialCommunityIcons', name: 'coffee', backgroundColor: '#FFF3E0', iconColor: '#5D4037' },
+    { library: 'MaterialCommunityIcons', name: 'food-croissant', backgroundColor: '#FFF8DC', iconColor: '#F4C430' },
+    { library: 'MaterialCommunityIcons', name: 'fish', backgroundColor: '#E6EEFF', iconColor: '#2196F3' },
+    { library: 'MaterialCommunityIcons', name: 'carrot', backgroundColor: '#E0F4E0', iconColor: '#66BB6A' },
+    { library: 'MaterialCommunityIcons', name: 'chef-hat', backgroundColor: '#E5E7EB', iconColor: '#6B7280' },
+];
 
 // Helper to update recipe on backend
-async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingredients, steps }: { recipeId: string; user_id: string; title: string; time: string; tags: string[]; ingredients: string[]; steps: string[] }) {
+async function updateRecipeOnServer({ recipeId, user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }: { recipeId: string; user_id: string; title: string; description?: string; time: string; servings: string; tags: string[]; ingredients: string[]; steps: string[]; icon_library?: string; icon_name?: string; icon_bg_color?: string; icon_color?: string }) {
     const response = await fetch(`https://familycooksclean.onrender.com/recipes/${recipeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, title, time, tags, ingredients, steps }),
+        body: JSON.stringify({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }),
     });
     if (!response.ok) throw new Error('Failed to update recipe');
     return response.json();
@@ -19,8 +36,10 @@ async function updateRecipeOnServer({ recipeId, user_id, title, time, tags, ingr
 
 export default function EditRecipeScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     
     const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
     const [tags, setTags] = useState<string[]>([]);
     const [newTag, setNewTag] = useState('');
     const [time, setTime] = useState('');
@@ -30,8 +49,20 @@ export default function EditRecipeScreen() {
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
     const [recipeId, setRecipeId] = useState('');
+    const [selectedIcon, setSelectedIcon] = useState<IconConfig | null>(null);
+    
+    const [iconSectionExpanded, setIconSectionExpanded] = useState(false);
+    const [tagsSectionExpanded, setTagsSectionExpanded] = useState(false);
+    const [ingredientsExpanded, setIngredientsExpanded] = useState(true);
+    const [instructionsExpanded, setInstructionsExpanded] = useState(true);
 
-    // Load recipe data from global store on mount
+    useEffect(() => {
+        if (title || tags.length > 0) {
+            const autoIcon = getRecipeIconConfig(title, tags, 0);
+            if (!selectedIcon) setSelectedIcon(autoIcon);
+        }
+    }, [title, tags]);
+
     useEffect(() => {
         const recipe = recipeStore.getEditRecipe();
         
@@ -43,11 +74,20 @@ export default function EditRecipeScreen() {
         
         setRecipeId(recipe.id);
         setTitle(recipe.title || '');
+        setDescription(recipe.description || '');
         setTime(recipe.time || '');
         setServings(recipe.servings || '');
         setIngredients(Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0 ? recipe.ingredients : ['']);
         setSteps(Array.isArray(recipe.steps) && recipe.steps.length > 0 ? recipe.steps : ['']);
         setTags(Array.isArray(recipe.tags) ? recipe.tags : []);
+        if (recipe.icon_library && recipe.icon_name) {
+            setSelectedIcon({
+                library: recipe.icon_library as 'MaterialCommunityIcons' | 'Ionicons',
+                name: recipe.icon_name as string,
+                backgroundColor: (recipe.icon_bg_color as string) || '#F3F4F6',
+                iconColor: (recipe.icon_color as string) || '#9CA3AF',
+            });
+        }
         setLoading(false);
     }, []);
 
@@ -68,9 +108,8 @@ export default function EditRecipeScreen() {
     }
 
     function removeIngredient(idx: number) {
-        if (ingredients.length > 1) {
-            setIngredients(ingredients.filter((_, i) => i !== idx));
-        }
+        const filtered = ingredients.filter((_, i) => i !== idx);
+        setIngredients(filtered.length > 0 ? filtered : ['']);
     }
 
     function updateIngredient(idx: number, value: string) {
@@ -84,9 +123,8 @@ export default function EditRecipeScreen() {
     }
 
     function removeStep(idx: number) {
-        if (steps.length > 1) {
-            setSteps(steps.filter((_, i) => i !== idx));
-        }
+        const filtered = steps.filter((_, i) => i !== idx);
+        setSteps(filtered.length > 0 ? filtered : ['']);
     }
 
     function updateStep(idx: number, value: string) {
@@ -115,14 +153,21 @@ export default function EditRecipeScreen() {
                 return;
             }
             
+            const iconData = selectedIcon || getRecipeIconConfig(title, tags, 0);
             await updateRecipeOnServer({
                 recipeId,
                 user_id,
                 title,
+                description: description.trim() || undefined,
                 time,
-                tags: tags,
+                servings,
+                tags,
                 ingredients: ingredientsArr,
                 steps: stepsArr,
+                icon_library: iconData.library,
+                icon_name: iconData.name,
+                icon_bg_color: iconData.backgroundColor,
+                icon_color: iconData.iconColor,
             });
             
             // Clear the store and navigate back to the updated recipe
@@ -138,10 +183,12 @@ export default function EditRecipeScreen() {
         }
     }
 
+    const currentIcon = selectedIcon || getRecipeIconConfig(title, tags, 0);
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#6DA98C" />
+                <ActivityIndicator size="large" color="#1F2937" />
                 <CustomText style={styles.loadingText}>Loading recipe...</CustomText>
             </View>
         );
@@ -151,187 +198,222 @@ export default function EditRecipeScreen() {
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
             
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerContent}>
+            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                <View style={styles.headerRow}>
                     <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={26} color="#222" />
+                        <Ionicons name="arrow-back" size={24} color="#1F2937" />
                     </TouchableOpacity>
-                    <CustomText style={styles.logoText}>🍳</CustomText>
-                    <View style={{ flex: 1 }} />
-                </View>
-                <CustomText style={styles.headerText}>Edit Recipe</CustomText>
-                <CustomText style={styles.subHeader}>Make changes to your recipe</CustomText>
-                <View style={styles.extractedIndicator}>
-                    <Ionicons name="create-outline" size={16} color="#6DA98C" />
-                    <CustomText style={styles.extractedText}>Editing existing recipe</CustomText>
+                    <CustomText style={styles.headerTitle}>Edit Recipe</CustomText>
+                    <TouchableOpacity style={styles.menuButton}>
+                        <Ionicons name="ellipsis-vertical" size={24} color="#1F2937" />
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Content */}
             <ScrollView 
                 style={styles.scrollView} 
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Recipe Name Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="restaurant-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Recipe Name</CustomText>
-                    </View>
+                {/* Recipe Details */}
+                <View style={styles.card}>
+                    <CustomText style={styles.cardTitle}>Recipe Details</CustomText>
                     <TextInput 
                         style={styles.input} 
-                        placeholder="Enter your recipe name" 
-                        placeholderTextColor="#B0B0B0" 
+                        placeholder="Recipe Name"
+                        placeholderTextColor="#9CA3AF" 
                         value={title} 
                         onChangeText={setTitle}
                     />
-                </View>
-
-                {/* Basic Info Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="information-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Basic Information</CustomText>
-                    </View>
+                    <TextInput 
+                        style={[styles.input, styles.textArea]} 
+                        placeholder="Brief description..."
+                        placeholderTextColor="#9CA3AF" 
+                        value={description} 
+                        onChangeText={setDescription}
+                        multiline
+                        numberOfLines={3}
+                    />
                     <View style={styles.row}>
                         <View style={styles.halfInput}>
+                            <CustomText style={styles.label}>Cook Time (mins)</CustomText>
                             <TextInput 
                                 style={styles.input} 
-                                placeholder="Cook time (min)" 
-                                placeholderTextColor="#B0B0B0" 
-                                keyboardType="numeric" 
+                                placeholder="30"
+                                placeholderTextColor="#9CA3AF" 
+                                keyboardType="number-pad" 
                                 value={time} 
-                                onChangeText={setTime}
+                                onChangeText={(val) => setTime(val.replace(/[^0-9]/g, ''))}
                             />
                         </View>
                         <View style={styles.halfInput}>
+                            <CustomText style={styles.label}>Servings</CustomText>
                             <TextInput 
                                 style={styles.input} 
-                                placeholder="Servings" 
-                                placeholderTextColor="#B0B0B0" 
-                                keyboardType="numeric" 
+                                placeholder="4"
+                                placeholderTextColor="#9CA3AF" 
+                                keyboardType="number-pad" 
                                 value={servings} 
-                                onChangeText={setServings}
+                                onChangeText={(val) => setServings(val.replace(/[^0-9]/g, ''))}
                             />
                         </View>
                     </View>
-                    
-                    {/* Tags */}
-                    <View style={styles.tagsSection}>
+                </View>
+
+                {/* Recipe Icon */}
+                <View style={styles.card}>
+                    <TouchableOpacity 
+                        style={styles.cardHeader}
+                        onPress={() => setIconSectionExpanded(!iconSectionExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <CustomText style={styles.cardTitle}>Recipe Icon</CustomText>
+                        <Ionicons name={iconSectionExpanded ? "chevron-up" : "chevron-down"} size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                    {iconSectionExpanded && (
+                        <View style={styles.iconSelector}>
+                            <FlatList
+                                data={POPULAR_ICONS}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.iconScrollContent}
+                                keyExtractor={(_, i) => `icon-${i}`}
+                                renderItem={({ item }) => {
+                                    const isSelected = selectedIcon ? (selectedIcon.name === item.name && selectedIcon.library === item.library) : (currentIcon.name === item.name && currentIcon.library === item.library);
+                                    return (
+                                        <TouchableOpacity style={styles.iconOption} onPress={() => setSelectedIcon(item)} activeOpacity={0.7}>
+                                            <View style={[styles.iconOptionCircle, { backgroundColor: item.backgroundColor, borderWidth: isSelected ? 3 : 1, borderColor: isSelected ? '#6DA98C' : '#E5E7EB' }]}>
+                                                {item.library === 'MaterialCommunityIcons' ? (
+                                                    <MaterialCommunityIcons name={item.name as any} size={32} color={isSelected ? item.iconColor : '#D1D5DB'} />
+                                                ) : (
+                                                    <Ionicons name={item.name as any} size={32} color={isSelected ? item.iconColor : '#D1D5DB'} />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                            />
+                        </View>
+                    )}
+                </View>
+
+                {/* Tags */}
+                <View style={styles.card}>
+                    <TouchableOpacity style={styles.cardHeader} onPress={() => setTagsSectionExpanded(!tagsSectionExpanded)} activeOpacity={0.7}>
+                        <CustomText style={styles.cardTitle}>Tags</CustomText>
+                        <Ionicons name={tagsSectionExpanded ? "chevron-up" : "chevron-down"} size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                    {tagsSectionExpanded && (
                         <View style={styles.tagsContainer}>
-                            {tags.map((tag, index) => (
-                                <View key={index} style={styles.tagChip}>
-                                    <CustomText style={styles.tagText}>{tag}</CustomText>
-                                    <TouchableOpacity onPress={() => removeTag(tag)}>
-                                        <Ionicons name="close-circle" size={16} color="#EF4444" />
-                                    </TouchableOpacity>
+                            {tags.length > 0 && (
+                                <View style={styles.tagsList}>
+                                    {tags.map((tag, index) => (
+                                        <View key={index} style={styles.tagChip}>
+                                            <CustomText style={styles.tagText}>{tag}</CustomText>
+                                            <TouchableOpacity onPress={() => removeTag(tag)}>
+                                                <Ionicons name="close-circle" size={16} color="#6B7280" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                            <View style={styles.tagInputRow}>
+                                <TextInput
+                                    style={styles.tagInput}
+                                    placeholder="Add tag (press Enter)"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={newTag}
+                                    onChangeText={setNewTag}
+                                    onSubmitEditing={addTag}
+                                    returnKeyType="done"
+                                />
+                            </View>
+                        </View>
+                    )}
+                </View>
+
+                {/* Ingredients */}
+                <View style={styles.card}>
+                    <TouchableOpacity style={styles.cardHeader} onPress={() => setIngredientsExpanded(!ingredientsExpanded)} activeOpacity={0.7}>
+                        <CustomText style={styles.cardTitle}>Ingredients</CustomText>
+                        <Ionicons name={ingredientsExpanded ? "chevron-up" : "chevron-down"} size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                    {ingredientsExpanded && (
+                        <View>
+                            {ingredients.map((ing, idx) => (
+                                <View key={idx} style={styles.ingredientItem}>
+                                    <TextInput
+                                        style={styles.ingredientInput}
+                                        placeholder="Add ingredient"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={ing}
+                                        onChangeText={val => updateIngredient(idx, val)}
+                                        blurOnSubmit={false}
+                                    />
+                                    {ingredients.length > 1 && (
+                                        <TouchableOpacity style={styles.removeItemButton} onPress={() => removeIngredient(idx)}>
+                                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             ))}
-                        </View>
-                        <View style={styles.newTagRow}>
-                            <Ionicons name="pricetag-outline" size={18} color="#6DA98C" style={styles.newTagIcon} />
-                            <TextInput
-                                style={styles.newTagInput}
-                                placeholder="Add a tag"
-                                placeholderTextColor="#9CA3AF"
-                                value={newTag}
-                                onChangeText={setNewTag}
-                                onSubmitEditing={addTag}
-                                returnKeyType="done"
-                            />
-                            <TouchableOpacity
-                                style={[styles.newTagButton, !newTag.trim() && styles.newTagButtonDisabled]}
-                                onPress={addTag}
-                                disabled={!newTag.trim()}
-                            >
-                                <Ionicons name="add" size={18} color="#fff" />
+                            <TouchableOpacity style={styles.addButtonRow} onPress={addIngredient} activeOpacity={0.8}>
+                                <View style={styles.addButtonIcon}>
+                                    <Ionicons name="add" size={20} color="#6DA98C" />
+                                </View>
                             </TouchableOpacity>
                         </View>
-                        <CustomText style={styles.tagHelper}>Press return or tap add to save the tag</CustomText>
-                    </View>
+                    )}
                 </View>
 
-                {/* Ingredients Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="list-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Ingredients</CustomText>
-                    </View>
-                    {ingredients.map((ingredient, idx) => (
-                        <View key={idx} style={styles.inputRow}>
-                            <TextInput 
-                                style={[styles.input, styles.flexInput]} 
-                                placeholder={`Ingredient ${idx + 1}`} 
-                                placeholderTextColor="#B0B0B0" 
-                                value={ingredient} 
-                                onChangeText={(value) => updateIngredient(idx, value)}
-                            />
-                            {ingredients.length > 1 && (
-                                <TouchableOpacity 
-                                    style={styles.removeButton} 
-                                    onPress={() => removeIngredient(idx)}
-                                >
-                                    <Ionicons name="close-circle" size={24} color="#EF4444" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ))}
-                    <TouchableOpacity style={styles.addButton} onPress={addIngredient}>
-                        <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.addButtonText}>Add Ingredient</CustomText>
+                {/* Instructions */}
+                <View style={styles.card}>
+                    <TouchableOpacity style={styles.cardHeader} onPress={() => setInstructionsExpanded(!instructionsExpanded)} activeOpacity={0.7}>
+                        <CustomText style={styles.cardTitle}>Instructions</CustomText>
+                        <Ionicons name={instructionsExpanded ? "chevron-up" : "chevron-down"} size={20} color="#9CA3AF" />
                     </TouchableOpacity>
-                </View>
-
-                {/* Steps Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Ionicons name="list-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.sectionTitle}>Instructions</CustomText>
-                    </View>
-                    {steps.map((step, idx) => (
-                        <View key={idx} style={styles.inputRow}>
-                            <View style={styles.stepNumber}>
-                                <CustomText style={styles.stepNumberText}>{idx + 1}</CustomText>
-                            </View>
-                            <TextInput 
-                                style={[styles.input, styles.flexInput, styles.stepInput]} 
-                                placeholder={`Step ${idx + 1}`} 
-                                placeholderTextColor="#B0B0B0" 
-                                value={step} 
-                                onChangeText={(value) => updateStep(idx, value)}
-                                multiline
-                            />
-                            {steps.length > 1 && (
-                                <TouchableOpacity 
-                                    style={styles.removeButton} 
-                                    onPress={() => removeStep(idx)}
-                                >
-                                    <Ionicons name="close-circle" size={24} color="#EF4444" />
-                                </TouchableOpacity>
-                            )}
+                    {instructionsExpanded && (
+                        <View>
+                            {steps.map((step, idx) => (
+                                <View key={idx} style={styles.stepItem}>
+                                    <View style={styles.stepNumber}>
+                                        <CustomText style={styles.stepNumberText}>{idx + 1}</CustomText>
+                                    </View>
+                                    <TextInput
+                                        style={styles.stepInput}
+                                        placeholder="Add instruction step"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={step}
+                                        onChangeText={val => updateStep(idx, val)}
+                                        multiline
+                                        blurOnSubmit={false}
+                                    />
+                                    {steps.length > 1 && (
+                                        <TouchableOpacity style={styles.removeItemButton} onPress={() => removeStep(idx)}>
+                                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))}
+                            <TouchableOpacity style={styles.addButtonRow} onPress={addStep} activeOpacity={0.8}>
+                                <View style={styles.addButtonIcon}>
+                                    <Ionicons name="add" size={20} color="#6DA98C" />
+                                </View>
+                            </TouchableOpacity>
                         </View>
-                    ))}
-                    <TouchableOpacity style={styles.addButton} onPress={addStep}>
-                        <Ionicons name="add-circle-outline" size={20} color="#6DA98C" />
-                        <CustomText style={styles.addButtonText}>Add Step</CustomText>
-                    </TouchableOpacity>
+                    )}
                 </View>
 
-                {/* Save Button */}
                 <TouchableOpacity 
                     style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
-                    onPress={handleSaveRecipe}
+                    onPress={handleSaveRecipe} 
                     disabled={saving}
+                    activeOpacity={0.9}
                 >
                     {saving ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
-                        <>
-                            <Ionicons name="save-outline" size={20} color="#fff" />
-                            <CustomText style={styles.saveButtonText}>Update Recipe</CustomText>
-                        </>
+                        <CustomText style={styles.saveButtonText}>Update Recipe</CustomText>
                     )}
                 </TouchableOpacity>
             </ScrollView>
@@ -342,251 +424,245 @@ export default function EditRecipeScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#F9FAFB',
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: '#F9FAFB',
     },
     loadingText: {
         marginTop: 16,
         fontSize: 16,
-        color: '#666',
-    },
-    errorContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#fff',
-    },
-    errorText: {
-        fontSize: 18,
-        color: '#EF4444',
-        textAlign: 'center',
-        marginBottom: 20,
-    },
-    retryButton: {
-        backgroundColor: '#6DA98C',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 12,
-    },
-    retryButtonText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#fff',
+        color: '#6B7280',
     },
     header: {
-        backgroundColor: '#6DA98C',
-        paddingTop: 60,
-        paddingBottom: 24,
+        backgroundColor: '#F3F0FF',
+        paddingBottom: 20,
         paddingHorizontal: 20,
     },
-    headerContent: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        justifyContent: 'space-between',
     },
     backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
+        padding: 4,
     },
-    logoText: {
-        fontSize: 24,
-        color: '#fff',
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2937',
+        letterSpacing: -0.3,
     },
-    headerText: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 8,
-    },
-    subHeader: {
-        fontSize: 16,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 16,
-    },
-    extractedIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        alignSelf: 'flex-start',
-    },
-    extractedText: {
-        fontSize: 14,
-        color: '#fff',
-        marginLeft: 6,
+    menuButton: {
+        padding: 4,
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         padding: 20,
-        paddingBottom: 40,
+        paddingBottom: 100,
     },
-    section: {
-        marginBottom: 32,
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: 'rgba(0, 0, 0, 0.05)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    sectionHeader: {
+    cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 16,
+        justifyContent: 'space-between',
+        marginBottom: 12,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#222',
-        marginLeft: 8,
+    cardTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#1F2937',
+        letterSpacing: -0.2,
+    },
+    input: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 12,
+    },
+    textArea: {
+        minHeight: 80,
+        textAlignVertical: 'top',
+        paddingTop: 12,
     },
     row: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         gap: 12,
     },
     halfInput: {
         flex: 1,
     },
-    input: {
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: '#222',
-        backgroundColor: '#F9FAFB',
+    label: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginBottom: 6,
     },
-    inputRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-        gap: 12,
-    },
-    flexInput: {
-        flex: 1,
-    },
-    removeButton: {
-        padding: 4,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderWidth: 2,
-        borderColor: '#6DA98C',
-        borderStyle: 'dashed',
-        borderRadius: 12,
-        marginTop: 8,
-    },
-    addButtonText: {
-        fontSize: 16,
-        color: '#6DA98C',
-        marginLeft: 8,
-        fontWeight: '500',
-    },
-    stepNumber: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#6DA98C',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    stepNumberText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
-    stepInput: {
-        minHeight: 60,
-        textAlignVertical: 'top',
-    },
-    tagsSection: {
+    iconSelector: {
         marginTop: 12,
+        paddingVertical: 8,
+    },
+    iconScrollContent: {
+        paddingRight: 20,
         gap: 12,
+    },
+    iconOption: {
+        marginRight: 12,
+    },
+    iconOptionCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     tagsContainer: {
+        marginTop: 8,
+    },
+    tagsList: {
         flexDirection: 'row',
         flexWrap: 'wrap',
+        marginBottom: 12,
         gap: 8,
     },
     tagChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#E8F5E8',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        backgroundColor: '#F3F4F6',
         borderRadius: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
         gap: 6,
     },
     tagText: {
-        fontSize: 14,
-        color: '#2D5A4A',
+        fontSize: 13,
         fontWeight: '500',
-    },
-    newTagInput: {
-        flex: 1,
-        paddingVertical: 6,
-        fontSize: 14,
-        color: '#111827',
-    },
-    newTagRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        backgroundColor: '#F9FAFB',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-    },
-    newTagIcon: {
-        marginRight: 2,
-    },
-    newTagButton: {
-        backgroundColor: '#6DA98C',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 10,
-    },
-    newTagButtonDisabled: {
-        backgroundColor: '#C7DAD0',
-    },
-    tagHelper: {
-        fontSize: 12,
         color: '#6B7280',
     },
-    saveButton: {
+    tagInputRow: {
+        marginTop: 8,
+    },
+    tagInput: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    ingredientItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#6DA98C',
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        borderRadius: 12,
-        marginTop: 20,
+        marginBottom: 12,
         gap: 8,
     },
+    ingredientInput: {
+        flex: 1,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    stepItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: 12,
+        gap: 12,
+    },
+    stepNumber: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#1F2937',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    stepNumberText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    stepInput: {
+        flex: 1,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1F2937',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        minHeight: 44,
+        textAlignVertical: 'top',
+    },
+    removeItemButton: {
+        padding: 4,
+        marginTop: 2,
+    },
+    addButtonRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+    },
+    addButtonIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 2,
+        borderColor: '#6DA98C',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    saveButton: {
+        backgroundColor: '#1F2937',
+        borderRadius: 16,
+        paddingVertical: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        shadowColor: '#1F2937',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+    },
     saveButtonDisabled: {
-        opacity: 0.6,
+        backgroundColor: '#9CA3AF',
     },
     saveButtonText: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#fff',
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '700',
     },
 }); 
