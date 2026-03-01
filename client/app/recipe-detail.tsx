@@ -21,7 +21,7 @@ import CustomText from '../components/CustomText';
 import { supabase } from '../lib/supabase';
 import { getRecipeIconConfig } from '../utils/recipeIcons';
 import { useFocusEffect } from '@react-navigation/native';
-import { Heart, HeartIcon, Book, BookIcon } from 'lucide-react-native';
+import { Book, BookIcon } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -877,7 +877,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
           </TouchableOpacity>
           {!isAIRecipe && (
             <TouchableOpacity style={styles.headerBtn} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              {favorited ? <HeartIcon color="#E4576A" size={24} /> : <Heart color="#1F2937" size={24} />}
+              {favorited ? <Ionicons name="heart" size={24} color="#F87171" /> : <Ionicons name="heart-outline" size={24} color="#1F2937" />}
             </TouchableOpacity>
           )}
         </View>

@@ -5,7 +5,6 @@ import CustomText from '../../components/CustomText';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Heart, HeartIcon } from 'lucide-react-native';
 import { profileService } from '../../lib/profileService';
 import { supabase } from '../../lib/supabase';
 
@@ -420,9 +419,9 @@ export default function RecipesScreen() {
                         style={styles.heartButton}
                     >
                         {favorited[item.id] ? (
-                            <HeartIcon color="#E4576A" size={24} />
+                            <Ionicons name="heart" size={24} color="#F87171" />
                         ) : (
-                            <Heart color="#CBD5F5" size={24} />
+                            <Ionicons name="heart-outline" size={24} color="#CBD5F5" />
                         )}
                     </TouchableOpacity>
                 </View>

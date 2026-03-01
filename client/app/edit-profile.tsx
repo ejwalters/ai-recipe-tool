@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
@@ -23,6 +23,7 @@ export default function EditProfileScreen() {
     const [avatarUrl, setAvatarUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [initialProfile, setInitialProfile] = useState<ProfileState>({
         name: '',
         email: '',
@@ -61,12 +62,11 @@ export default function EditProfileScreen() {
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 1, // get the best quality, we'll compress after
+            quality: 1,
         });
         if (!result.canceled && result.assets[0]) {
-            setLoading(true);
+            setUploadingAvatar(true);
             try {
-                // Resize and compress the image before upload
                 const manipResult = await ImageManipulator.manipulateAsync(
                     result.assets[0].uri,
                     [{ resize: { width: 512, height: 512 } }],
@@ -78,7 +78,7 @@ export default function EditProfileScreen() {
             } catch {
                 Alert.alert('Error', 'Failed to upload image');
             }
-            setLoading(false);
+            setUploadingAvatar(false);
         }
     };
 
@@ -90,9 +90,7 @@ export default function EditProfileScreen() {
     const isDisabled = !hasChanges || saving || loading;
 
     const handleSave = async () => {
-        if (!hasChanges) {
-            return;
-        }
+        if (!hasChanges) return;
         setSaving(true);
         try {
             const updatedProfile: ProfileState = {
@@ -114,268 +112,277 @@ export default function EditProfileScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top']}>
             <Stack.Screen options={{ headerShown: false }} />
-            
-            {/* Header */}
-            <View style={styles.headerBg}>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-                        <Ionicons name="close" size={24} color="#6B7280" />
-                    </TouchableOpacity>
-                    <View style={{ flex: 1 }} />
-                </View>
-                <CustomText style={styles.headerText}>Edit Profile</CustomText>
-                <CustomText style={styles.subHeader}>Update your personal information</CustomText>
-            </View>
 
-            {/* Main Content */}
-            <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
-                    
-                    {/* Profile Image Section */}
-                    <View style={styles.imageCard}>
-                        <View style={styles.imageContainer}>
-                            <TouchableOpacity onPress={pickImage} disabled={loading}>
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                        <Ionicons name="arrow-back" size={24} color="#1F2937" />
+                    </TouchableOpacity>
+                    <CustomText style={styles.headerTitle}>Edit Profile</CustomText>
+                    <View style={styles.headerSpacer} />
+                </View>
+
+                {/* Avatar Section */}
+                <View style={styles.heroSection}>
+                    <TouchableOpacity onPress={pickImage} disabled={uploadingAvatar} style={styles.avatarTouchable}>
+                        <View style={styles.avatarWrapper}>
+                            <View style={styles.avatarRing}>
                                 <Image
-                                    source={
-                                        avatarUrl
-                                            ? { uri: avatarUrl }
-                                            : require('../assets/images/avatar.png')
-                                    }
-                                    style={styles.profileImage}
+                                    source={avatarUrl ? { uri: avatarUrl } : require('../assets/images/avatar.png')}
+                                    style={styles.avatar}
                                 />
-                                {loading && (
-                                    <View style={styles.imageOverlay}>
+                                {uploadingAvatar && (
+                                    <View style={styles.avatarOverlay}>
                                         <ActivityIndicator size="small" color="#fff" />
                                     </View>
                                 )}
-                            </TouchableOpacity>
+                            </View>
+                            <View style={styles.cameraBadge}>
+                                <Ionicons name="camera" size={15} color="#fff" />
+                            </View>
                         </View>
-                        <CustomText style={styles.changePhoto}>Change Photo</CustomText>
-                        <CustomText style={styles.changePhotoSub}>Add or change your photo to personalize your experience</CustomText>
+                        <CustomText style={styles.changePhotoText}>
+                            {uploadingAvatar ? 'Uploading...' : 'Change photo'}
+                        </CustomText>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Form Card */}
+                <View style={styles.formCard}>
+                    <View style={styles.inputGroup}>
+                        <CustomText style={styles.label}>Name</CustomText>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Your name"
+                            placeholderTextColor="#9CA3AF"
+                            value={name}
+                            onChangeText={setName}
+                            editable={!loading}
+                        />
                     </View>
 
-                    {/* Form Section */}
-                    <View style={styles.formContainer}>
-                        <View style={styles.inputGroup}>
-                            <CustomText style={styles.sectionLabel}>Name</CustomText>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your name"
-                                placeholderTextColor="#9CA3AF"
-                                value={name}
-                                onChangeText={setName}
-                            />
-                        </View>
+                    <View style={styles.divider} />
 
-                        <View style={styles.inputGroup}>
-                            <CustomText style={styles.sectionLabel}>Email Address</CustomText>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your email"
-                                placeholderTextColor="#9CA3AF"
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <CustomText style={styles.sectionLabel}>Phone</CustomText>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your phone number"
-                                placeholderTextColor="#9CA3AF"
-                                value={phone}
-                                onChangeText={setPhone}
-                                keyboardType="phone-pad"
-                            />
-                        </View>
+                    <View style={styles.inputGroup}>
+                        <CustomText style={styles.label}>Email</CustomText>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="your@email.com"
+                            placeholderTextColor="#9CA3AF"
+                            value={email}
+                            onChangeText={setEmail}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            editable={!loading}
+                        />
                     </View>
 
-                    {/* Save Button */}
-                    <View style={styles.saveContainer}>
-                        <TouchableOpacity 
-                            style={[
-                                styles.saveButton,
-                                hasChanges ? styles.saveButtonActive : styles.saveButtonInactive,
-                                (saving || loading) && styles.saveButtonLoading,
-                            ]} 
-                            onPress={handleSave}
-                            disabled={isDisabled}
-                            activeOpacity={0.92}
-                        >
-                            {saving ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <>
-                                    <Ionicons name="checkmark" size={20} color="#fff" style={{ marginRight: 8 }} />
-                                    <CustomText style={styles.saveButtonText}>Save Changes</CustomText>
-                                </>
-                            )}
-                        </TouchableOpacity>
+                    <View style={styles.divider} />
+
+                    <View style={styles.inputGroup}>
+                        <CustomText style={styles.label}>Phone</CustomText>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Phone number"
+                            placeholderTextColor="#9CA3AF"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            editable={!loading}
+                        />
                     </View>
-                </ScrollView>
-            </View>
+                </View>
+
+                {/* Save Button */}
+                <TouchableOpacity
+                    style={[
+                        styles.saveButton,
+                        hasChanges && styles.saveButtonActive,
+                        isDisabled && styles.saveButtonDisabled,
+                    ]}
+                    onPress={handleSave}
+                    disabled={isDisabled}
+                    activeOpacity={0.8}
+                >
+                    {saving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <>
+                            <Ionicons name="checkmark-circle" size={20} color="#fff" style={styles.saveIcon} />
+                            <CustomText style={styles.saveButtonText}>Save Changes</CustomText>
+                        </>
+                    )}
+                </TouchableOpacity>
+
+                <View style={styles.bottomSpacer} />
+            </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    headerBg: {
-        backgroundColor: '#F3F0FF',
-        paddingTop: Platform.OS === 'ios' ? 48 : 32,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+    container: {
+        flex: 1,
+        backgroundColor: '#FAFAFA',
     },
-    headerRow: {
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingTop: 12,
+    },
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 24,
     },
-    closeButton: {
+    backButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
-        letterSpacing: -0.5,
-    },
-    subHeader: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
-    },
-    imageCard: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        marginHorizontal: 18,
-        marginBottom: 24,
-        padding: 24,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.04,
         shadowRadius: 8,
         elevation: 2,
     },
-    imageContainer: {
-        alignItems: 'center',
-        marginBottom: 16,
+    headerTitle: {
+        flex: 1,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2937',
+        textAlign: 'center',
     },
-    profileImage: {
+    headerSpacer: {
+        width: 40,
+    },
+    heroSection: {
+        alignItems: 'center',
+        paddingVertical: 20,
+        marginBottom: 8,
+    },
+    avatarTouchable: {
+        alignItems: 'center',
+    },
+    avatarWrapper: {
+        width: 108,
+        height: 108,
+        marginBottom: 12,
+        position: 'relative',
+    },
+    avatarRing: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        backgroundColor: '#D1E7DD',
-        marginBottom: 8,
+        backgroundColor: '#F3F0FF',
+        padding: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        position: 'absolute',
+        top: 4,
+        left: 4,
     },
-    changePhoto: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
-        textAlign: 'center',
-        marginBottom: 4,
+    avatar: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        backgroundColor: '#E8E0F0',
     },
-    changePhotoSub: {
-        fontSize: 14,
-        color: '#6B7280',
-        textAlign: 'center',
-        fontWeight: '500',
+    avatarOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        borderRadius: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    formContainer: {
-        paddingHorizontal: 18,
-        marginBottom: 24,
-    },
-    inputGroup: {
-        marginBottom: 20,
-    },
-    sectionLabel: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#222',
-        marginBottom: 8,
-        marginLeft: 4,
-    },
-    input: {
-        backgroundColor: '#fff',
+    cameraBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 32,
+        height: 32,
         borderRadius: 16,
-        paddingHorizontal: 18,
-        paddingVertical: 16,
-        fontSize: 16,
-        color: '#222',
-        fontWeight: '500',
+        backgroundColor: '#256D85',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    changePhotoText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#256D85',
+    },
+    formCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 8,
+        marginBottom: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-        elevation: 1,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
+        overflow: 'hidden',
     },
-    saveContainer: {
-        paddingHorizontal: 18,
+    inputGroup: {
+        paddingVertical: 16,
+    },
+    label: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#6B7280',
+        marginBottom: 8,
+    },
+    input: {
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 16,
+        color: '#1F2937',
+        fontWeight: '500',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#F3F4F6',
     },
     saveButton: {
-        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 52,
-        backgroundColor: '#D1D5DB',
-    },
-    saveButtonInactive: {
-        backgroundColor: '#D1D5DB',
-        shadowColor: '#D1D5DB',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        paddingVertical: 16,
+        borderRadius: 14,
+        backgroundColor: '#E5E7EB',
     },
     saveButtonActive: {
-        backgroundColor: '#34D399',
-        shadowColor: '#34D399',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
+        backgroundColor: '#256D85',
     },
-    saveButtonLoading: {
-        opacity: 0.85,
+    saveButtonDisabled: {
+        opacity: 0.6,
+    },
+    saveIcon: {
+        marginRight: 8,
     },
     saveButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '700',
     },
-    imageOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        borderRadius: 50,
-        justifyContent: 'center',
-        alignItems: 'center',
+    bottomSpacer: {
+        height: 32,
     },
-}); 
+});

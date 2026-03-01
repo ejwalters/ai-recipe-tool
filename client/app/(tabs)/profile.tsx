@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
+import { View, StyleSheet, Image, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CustomText from '../../components/CustomText';
 import { useRouter } from 'expo-router';
@@ -17,7 +17,6 @@ export default function ProfileScreen() {
             setLoading(true);
             try {
                 const profileData = await profileService.getProfile();
-                console.log('Profile data loaded:', profileData);
                 setProfile(profileData);
             } catch (e) {
                 console.log('Profile load error:', e);
@@ -28,32 +27,37 @@ export default function ProfileScreen() {
     }, []);
 
     async function handleSignOut() {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            Alert.alert('Sign Out Failed', error.message);
-        } else {
-            router.replace('/screens/Auth/LoginScreen');
-        }
+        Alert.alert(
+            'Sign Out',
+            'Are you sure you want to sign out?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Sign Out',
+                    style: 'destructive',
+                    onPress: async () => {
+                        const { error } = await supabase.auth.signOut();
+                        if (error) {
+                            Alert.alert('Sign Out Failed', error.message);
+                        } else {
+                            router.replace('/screens/Auth/LoginScreen');
+                        }
+                    },
+                },
+            ]
+        );
     }
 
-    return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
-            {/* Header */}
-            <View style={styles.headerBg}>
-                <View style={styles.headerRow}>
-                    <CustomText style={styles.logoText}>👤</CustomText>
-                    <View style={{ flex: 1 }} />
-                </View>
-                <CustomText style={styles.headerText}>Profile</CustomText>
-                <CustomText style={styles.subHeader}>Manage your account settings</CustomText>
-            </View>
+    const userName = profile?.name || 'Guest';
+    const userEmail = profile?.email || '';
 
-            {/* Main Content */}
-            <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
-                    {/* Profile Info Card */}
-                    <View style={styles.profileCard}>
-                        <View style={styles.profileInfo}>
+    return (
+        <SafeAreaView style={styles.container} edges={['top']}>
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Profile Hero */}
+                <View style={styles.heroSection}>
+                    <View style={styles.avatarWrapper}>
+                        <View style={styles.avatarRing}>
                             <Image
                                 source={
                                     profile?.avatar_url
@@ -62,216 +66,217 @@ export default function ProfileScreen() {
                                 }
                                 style={styles.avatar}
                             />
-                            <View style={styles.profileTextContainer}>
-                                {loading ? (
-                                    <>
-                                        <CustomText style={styles.name}>Loading...</CustomText>
-                                        <CustomText style={styles.email}>Loading...</CustomText>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CustomText style={styles.name}>{profile?.name || 'No name set'}</CustomText>
-                                        <CustomText style={styles.email}>{profile?.email || 'No email set'}</CustomText>
-                                    </>
-                                )}
-                            </View>
                         </View>
+                        {loading ? (
+                            <CustomText style={styles.userName}>Loading...</CustomText>
+                        ) : (
+                            <>
+                                <CustomText style={styles.userName}>{userName}</CustomText>
+                                {userEmail ? (
+                                    <CustomText style={styles.userEmail} numberOfLines={1}>{userEmail}</CustomText>
+                                ) : null}
+                            </>
+                        )}
                     </View>
+                </View>
 
-                    {/* Settings Cards */}
-                    <View style={styles.settingsContainer}>
-                        <TouchableOpacity style={styles.settingCard} onPress={() => router.push('/edit-profile')} activeOpacity={0.92}>
-                            <View style={styles.settingIconBox}>
-                                <Image source={require('../../assets/images/profile.png')} style={styles.settingIcon} />
-                            </View>
-                            <View style={styles.settingContent}>
-                                <CustomText style={styles.settingTitle}>Personal Information</CustomText>
-                                <CustomText style={styles.settingSubtitle}>Update your name and email</CustomText>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6B7280" style={styles.chevron} />
-                        </TouchableOpacity>
+                {/* Settings Card */}
+                <View style={styles.settingsCard}>
+                    <CustomText style={styles.settingsLabel}>Account</CustomText>
 
-                        <TouchableOpacity style={styles.settingCard} onPress={() => router.push('/dietary-preferences')} activeOpacity={0.92}>
-                            <View style={[styles.settingIconBox, styles.iconBoxGreen]}>
-                                <Image source={require('../../assets/images/fork-knife.png')} style={styles.settingIcon} />
-                            </View>
-                            <View style={styles.settingContent}>
-                                <CustomText style={styles.settingTitle}>Dietary Information</CustomText>
-                                <CustomText style={styles.settingSubtitle}>Set your food preferences</CustomText>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6B7280" style={styles.chevron} />
-                        </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.menuRow, styles.menuRowFirst]}
+                        onPress={() => router.push('/edit-profile')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.menuIconBox, { backgroundColor: '#E8F5E9' }]}>
+                            <Ionicons name="person-outline" size={22} color="#2E7D32" />
+                        </View>
+                        <View style={styles.menuText}>
+                            <CustomText style={styles.menuTitle}>Personal Information</CustomText>
+                            <CustomText style={styles.menuSubtitle}>Name and email</CustomText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.settingCard} onPress={() => router.push('/subscription')} activeOpacity={0.92}>
-                            <View style={[styles.settingIconBox, styles.iconBoxPurple]}>
-                                <Image source={require('../../assets/images/splash-icon.png')} style={styles.settingIcon} />
-                            </View>
-                            <View style={styles.settingContent}>
-                                <CustomText style={styles.settingTitle}>Plan Information</CustomText>
-                                <CustomText style={styles.settingSubtitle}>Manage your subscription</CustomText>
-                            </View>
-                            <Ionicons name="chevron-forward" size={20} color="#6B7280" style={styles.chevron} />
-                        </TouchableOpacity>
-                    </View>
+                    <View style={styles.menuDivider} />
 
-                    {/* Sign Out Button */}
-                    <View style={styles.signOutContainer}>
-                        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.92}>
-                            <Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-                            <CustomText style={styles.signOutButtonText}>Sign Out</CustomText>
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </View>
+                    <TouchableOpacity
+                        style={styles.menuRow}
+                        onPress={() => router.push('/dietary-preferences')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.menuIconBox, { backgroundColor: '#FFF3E0' }]}>
+                            <Ionicons name="restaurant-outline" size={22} color="#E65100" />
+                        </View>
+                        <View style={styles.menuText}>
+                            <CustomText style={styles.menuTitle}>Dietary Preferences</CustomText>
+                            <CustomText style={styles.menuSubtitle}>Allergies, diets, and preferences</CustomText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    <View style={styles.menuDivider} />
+
+                    <TouchableOpacity
+                        style={[styles.menuRow, styles.menuRowLast]}
+                        onPress={() => router.push('/subscription')}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.menuIconBox, { backgroundColor: '#E8EAF6' }]}>
+                            <Ionicons name="card-outline" size={22} color="#3949AB" />
+                        </View>
+                        <View style={styles.menuText}>
+                            <CustomText style={styles.menuTitle}>Plan & Subscription</CustomText>
+                            <CustomText style={styles.menuSubtitle}>Manage your plan</CustomText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Sign Out */}
+                <TouchableOpacity
+                    style={styles.signOutButton}
+                    onPress={handleSignOut}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="log-out-outline" size={20} color="#6B7280" style={styles.signOutIcon} />
+                    <CustomText style={styles.signOutText}>Sign Out</CustomText>
+                </TouchableOpacity>
+
+                <View style={styles.bottomSpacer} />
+            </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    headerBg: {
-        backgroundColor: '#F3F0FF',
-        paddingTop: Platform.OS === 'ios' ? 48 : 32,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+    container: {
+        flex: 1,
+        backgroundColor: '#FAFAFA',
     },
-    headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    logoText: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#222',
-        letterSpacing: 0.5,
-    },
-    headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
-        letterSpacing: -0.5,
-    },
-    subHeader: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
-    },
-    profileCard: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        marginHorizontal: 18,
-        marginBottom: 24,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    profileInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        marginRight: 16,
-        backgroundColor: '#D1E7DD',
-    },
-    profileTextContainer: {
+    scrollView: {
         flex: 1,
     },
-    name: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#222',
-        marginBottom: 4,
+    scrollContent: {
+        paddingTop: 12,
+        paddingHorizontal: 20,
     },
-    email: {
+    heroSection: {
+        alignItems: 'center',
+        paddingVertical: 28,
+        paddingHorizontal: 24,
+    },
+    avatarWrapper: {
+        alignItems: 'center',
+    },
+    avatarRing: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#F3F0FF',
+        padding: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    avatar: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        backgroundColor: '#E8E0F0',
+    },
+    userName: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginBottom: 4,
+        textAlign: 'center',
+    },
+    userEmail: {
         fontSize: 15,
         color: '#6B7280',
         fontWeight: '500',
+        textAlign: 'center',
     },
-    settingsContainer: {
-        paddingHorizontal: 18,
-        marginBottom: 24,
-    },
-    settingCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
+    settingsCard: {
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
-        padding: 16,
-        marginBottom: 12,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
+        marginBottom: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 1,
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
+        overflow: 'hidden',
     },
-    settingIconBox: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        backgroundColor: '#B6E2D3',
+    settingsLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#9CA3AF',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginLeft: 16,
+        marginBottom: 12,
+    },
+    menuRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 12,
+    },
+    menuRowFirst: {
+        paddingTop: 4,
+    },
+    menuRowLast: {
+        paddingBottom: 4,
+    },
+    menuIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 16,
+        marginRight: 14,
     },
-    iconBoxGreen: {
-        backgroundColor: '#B6E2D3',
-    },
-    iconBoxPurple: {
-        backgroundColor: '#D6D6F7',
-    },
-    settingIcon: {
-        width: 24,
-        height: 24,
-        tintColor: '#fff',
-    },
-    settingContent: {
+    menuText: {
         flex: 1,
     },
-    settingTitle: {
+    menuTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#222',
+        color: '#1F2937',
         marginBottom: 2,
     },
-    settingSubtitle: {
-        fontSize: 14,
+    menuSubtitle: {
+        fontSize: 13,
         color: '#6B7280',
         fontWeight: '500',
     },
-    chevron: {
-        marginLeft: 8,
-    },
-    signOutContainer: {
-        paddingHorizontal: 18,
+    menuDivider: {
+        height: 1,
+        backgroundColor: '#F3F4F6',
+        marginLeft: 70,
     },
     signOutButton: {
-        backgroundColor: '#FF385C',
-        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 52,
-        shadowColor: '#FF385C',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
+        paddingVertical: 14,
+        borderRadius: 14,
+        backgroundColor: '#F3F4F6',
     },
-    signOutButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '700',
+    signOutIcon: {
+        marginRight: 8,
     },
-}); 
+    signOutText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    bottomSpacer: {
+        height: 32,
+    },
+});

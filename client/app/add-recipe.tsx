@@ -22,12 +22,6 @@ export default function AddRecipeScreen() {
                             <Ionicons name="arrow-back" size={20} color="#1F2937" />
                         </View>
                     </TouchableOpacity>
-                    <View style={{ flex: 1 }} />
-                    <TouchableOpacity style={styles.searchButton}>
-                        <View style={styles.searchButtonCircle}>
-                            <Ionicons name="search" size={20} color="#1F2937" />
-                        </View>
-                    </TouchableOpacity>
                 </View>
                 
                 <View style={styles.headerContent}>
@@ -127,22 +121,6 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     backButtonCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    searchButton: {
-        padding: 4,
-    },
-    searchButtonCircle: {
         width: 40,
         height: 40,
         borderRadius: 20,

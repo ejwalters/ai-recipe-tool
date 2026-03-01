@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
@@ -13,7 +13,6 @@ export default function DietaryPreferencesScreen() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    // Load current dietary preferences on mount
     React.useEffect(() => {
         const loadPreferences = async () => {
             setLoading(true);
@@ -24,6 +23,7 @@ export default function DietaryPreferencesScreen() {
                 setInitialPreferences(currentPreferences);
             } catch (e) {
                 console.log('Failed to load dietary preferences:', e);
+                Alert.alert('Error', 'Failed to load preferences');
             }
             setLoading(false);
         };
@@ -34,248 +34,204 @@ export default function DietaryPreferencesScreen() {
     const isDisabled = !hasChanges || saving || loading;
 
     const handleSave = async () => {
-        if (!hasChanges) {
-            return;
-        }
+        if (!hasChanges) return;
         setSaving(true);
         try {
             await profileService.updateProfile({ dietary_preferences: preferences });
             setInitialPreferences(preferences);
-            alert('Dietary preferences updated!');
-            router.back();
+            Alert.alert('Success', 'Dietary preferences updated!', [
+                { text: 'OK', onPress: () => router.back() },
+            ]);
         } catch (e) {
-            alert('Failed to update dietary preferences.');
+            Alert.alert('Error', 'Failed to update preferences');
         }
         setSaving(false);
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F3F0FF' }} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top']}>
             <Stack.Screen options={{ headerShown: false }} />
-            
-            {/* Header */}
-            <View style={styles.headerBg}>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-                        <Ionicons name="close" size={24} color="#6B7280" />
+
+            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                        <Ionicons name="arrow-back" size={24} color="#1F2937" />
                     </TouchableOpacity>
-                    <View style={{ flex: 1 }} />
+                    <CustomText style={styles.headerTitle}>Dietary Preferences</CustomText>
+                    <View style={styles.headerSpacer} />
                 </View>
-                <CustomText style={styles.headerText}>Dietary Preferences</CustomText>
-                <CustomText style={styles.subHeader}>Tell us about your food preferences and restrictions</CustomText>
-            </View>
 
-            {/* Main Content */}
-            <View style={{ flex: 1, backgroundColor: '#F7F7FA' }}>
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, marginTop: 24 }} showsVerticalScrollIndicator={false}>
-                    
-                    {/* Info Card */}
-                    <View style={styles.infoCard}>
+                {/* Content Card */}
+                <View style={styles.formCard}>
+                    <View style={styles.infoRow}>
                         <View style={styles.infoIconBox}>
-                            <Ionicons name="restaurant-outline" size={24} color="#fff" />
+                            <Ionicons name="restaurant-outline" size={22} color="#E65100" />
                         </View>
-                        <CustomText style={styles.infoTitle}>Personalize Your Experience</CustomText>
-                        <CustomText style={styles.infoSubtitle}>
-                            Share your dietary restrictions, allergies, and preferences to get better recipe recommendations
-                        </CustomText>
+                        <View style={styles.infoText}>
+                            <CustomText style={styles.infoTitle}>Allergies & preferences</CustomText>
+                            <CustomText style={styles.infoSubtitle}>
+                                List allergies, diets, and ingredients to avoid for better recipe recommendations
+                            </CustomText>
+                        </View>
                     </View>
 
-                    {/* Preferences Input Card */}
-                    <View style={styles.inputCard}>
-                        <CustomText style={styles.sectionLabel}>Your Dietary Preferences</CustomText>
-                        <CustomText style={styles.sectionSubtitle}>
-                            List allergies, preferences, and ingredients to avoid
-                        </CustomText>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="e.g., Gluten-free, dairy allergy, vegetarian, no nuts..."
-                            placeholderTextColor="#9CA3AF"
-                            value={preferences}
-                            onChangeText={setPreferences}
-                            multiline
-                            numberOfLines={8}
-                            textAlignVertical="top"
-                            editable={!loading && !saving}
-                        />
-                    </View>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Gluten-free, dairy allergy, vegetarian, no nuts..."
+                        placeholderTextColor="#9CA3AF"
+                        value={preferences}
+                        onChangeText={setPreferences}
+                        multiline
+                        numberOfLines={6}
+                        textAlignVertical="top"
+                        editable={!loading && !saving}
+                    />
+                </View>
 
-                    {/* Save Button */}
-                    <View style={styles.saveContainer}>
-                        <TouchableOpacity 
-                            style={[
-                                styles.saveButton,
-                                hasChanges ? styles.saveButtonActive : styles.saveButtonInactive,
-                                (saving || loading) && styles.saveButtonLoading,
-                            ]} 
-                            onPress={handleSave} 
-                            disabled={isDisabled}
-                            activeOpacity={0.92}
-                        >
-                            {saving ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                                <>
-                                    <Ionicons name="checkmark" size={20} color="#fff" style={{ marginRight: 8 }} />
-                                    <CustomText style={styles.saveButtonText}>Save Preferences</CustomText>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            </View>
+                {/* Save Button */}
+                <TouchableOpacity
+                    style={[
+                        styles.saveButton,
+                        hasChanges && styles.saveButtonActive,
+                        isDisabled && styles.saveButtonDisabled,
+                    ]}
+                    onPress={handleSave}
+                    disabled={isDisabled}
+                    activeOpacity={0.8}
+                >
+                    {saving ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <>
+                            <Ionicons name="checkmark-circle" size={20} color="#fff" style={styles.saveIcon} />
+                            <CustomText style={styles.saveButtonText}>Save Preferences</CustomText>
+                        </>
+                    )}
+                </TouchableOpacity>
+
+                <View style={styles.bottomSpacer} />
+            </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    headerBg: {
-        backgroundColor: '#F3F0FF',
-        paddingTop: Platform.OS === 'ios' ? 48 : 32,
-        paddingBottom: 24,
-        paddingHorizontal: 24,
-        borderBottomLeftRadius: 32,
-        borderBottomRightRadius: 32,
+    container: {
+        flex: 1,
+        backgroundColor: '#FAFAFA',
     },
-    headerRow: {
+    scrollView: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingTop: 12,
+    },
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        marginBottom: 24,
     },
-    closeButton: {
+    backButton: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#fff',
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    headerText: {
-        fontSize: 26,
-        fontWeight: '800',
-        color: '#222',
-        marginTop: 2,
-        marginLeft: 2,
-        letterSpacing: -0.5,
-    },
-    subHeader: {
-        fontSize: 16,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginTop: 2,
-        marginBottom: 8,
-    },
-    infoCard: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        marginHorizontal: 18,
-        marginBottom: 24,
-        padding: 24,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.04,
         shadowRadius: 8,
         elevation: 2,
     },
+    headerTitle: {
+        flex: 1,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1F2937',
+        textAlign: 'center',
+    },
+    headerSpacer: {
+        width: 40,
+    },
+    formCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 2,
+        overflow: 'hidden',
+    },
+    infoRow: {
+        flexDirection: 'row',
+        marginBottom: 20,
+    },
     infoIconBox: {
-        width: 56,
-        height: 56,
-        borderRadius: 18,
-        backgroundColor: '#B6E2D3',
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#FFF3E0',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16,
+        marginRight: 14,
+    },
+    infoText: {
+        flex: 1,
     },
     infoTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
-        textAlign: 'center',
-        marginBottom: 8,
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F2937',
+        marginBottom: 4,
     },
     infoSubtitle: {
         fontSize: 14,
         color: '#6B7280',
-        textAlign: 'center',
         fontWeight: '500',
-        lineHeight: 20,
-    },
-    inputCard: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        marginHorizontal: 18,
-        marginBottom: 24,
-        padding: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    sectionLabel: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#222',
-        marginBottom: 6,
-    },
-    sectionSubtitle: {
-        fontSize: 14,
-        color: '#6B7280',
-        fontWeight: '500',
-        marginBottom: 20,
         lineHeight: 20,
     },
     input: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 16,
-        paddingHorizontal: 18,
-        paddingVertical: 16,
+        backgroundColor: '#F9FAFB',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         fontSize: 16,
-        color: '#222',
+        color: '#1F2937',
         fontWeight: '500',
-        minHeight: 140,
+        minHeight: 120,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#F3F4F6',
         textAlignVertical: 'top',
     },
-    saveContainer: {
-        paddingHorizontal: 18,
-    },
     saveButton: {
-        borderRadius: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 52,
-        backgroundColor: '#D1D5DB',
-    },
-    saveButtonInactive: {
-        backgroundColor: '#D1D5DB',
-        shadowColor: '#D1D5DB',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        paddingVertical: 16,
+        borderRadius: 14,
+        backgroundColor: '#E5E7EB',
     },
     saveButtonActive: {
-        backgroundColor: '#34D399',
-        shadowColor: '#34D399',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
+        backgroundColor: '#256D85',
     },
-    saveButtonLoading: {
-        opacity: 0.85,
+    saveButtonDisabled: {
+        opacity: 0.6,
+    },
+    saveIcon: {
+        marginRight: 8,
     },
     saveButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '700',
     },
-}); 
+    bottomSpacer: {
+        height: 32,
+    },
+});
