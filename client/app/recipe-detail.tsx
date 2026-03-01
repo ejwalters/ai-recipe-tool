@@ -879,6 +879,12 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
             )}
           </View>
         </View>
+        {recipe?.owner && (
+          <View style={styles.ownerRow}>
+            <Ionicons name="person-circle-outline" size={16} color="rgba(31,41,55,0.7)" />
+            <CustomText style={styles.ownerText}>{recipe.owner.display_name}</CustomText>
+          </View>
+        )}
         <View style={[styles.floatingActions, { top: insets.top + 8 }]}>
           <TouchableOpacity style={styles.floatingBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
@@ -919,12 +925,12 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         <View style={styles.detailActions}>
             {!isAIRecipe && recipe.user_id === userId && (
               <TouchableOpacity 
-                style={styles.detailActionBtn} 
+                style={styles.detailEditBtn} 
                 onPress={handleEditRecipe}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="create-outline" size={18} color="#256D85" />
-                <CustomText style={styles.detailActionBtnText}>Edit</CustomText>
+                <Ionicons name="create-outline" size={16} color="#256D85" />
+                <CustomText style={styles.detailEditBtnText}>Edit</CustomText>
               </TouchableOpacity>
             )}
             {isAIRecipe && !saved && (
@@ -1555,6 +1561,19 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
+  ownerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  ownerText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(31,41,55,0.8)',
+  },
   floatingActions: {
     position: 'absolute',
     left: 20,
@@ -1631,22 +1650,22 @@ const styles = StyleSheet.create({
   detailActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 10,
   },
-  detailActionBtn: {
+  detailEditBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#EEF2FF',
-  },
-  detailActionBtnIcon: {
+    gap: 6,
+    paddingVertical: 6,
     paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  detailActionBtnText: {
-    fontSize: 15,
+  detailEditBtnText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#256D85',
   },

@@ -431,18 +431,49 @@ router.get('/tags/popular', async (req, res) => {
 // GET /recipes/:id
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
+    const { user_id } = req.query;
     
-    const { data, error } = await supabase
+    const { data: recipe, error } = await supabase
         .from('recipes')
         .select('*')
         .eq('id', id)
         .single();
 
-    if (error) {
+    if (error || !recipe) {
         return res.status(404).json({ error: 'Recipe not found' });
     }
     
-    res.json(data);
+    // Fetch owner profile for creator display
+    let owner = null;
+    if (recipe.user_id) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, display_name, username, avatar_url')
+            .eq('id', recipe.user_id)
+            .single();
+        if (profile) {
+            owner = {
+                id: profile.id,
+                display_name: profile.display_name || profile.username || 'Unknown',
+                username: profile.username,
+                avatar_url: profile.avatar_url,
+            };
+        }
+    }
+    
+    // Include favorite status if user_id provided
+    let is_favorited = false;
+    if (user_id) {
+        const { data: fav } = await supabase
+            .from('favorites')
+            .select('recipe_id')
+            .eq('user_id', user_id)
+            .eq('recipe_id', id)
+            .maybeSingle();
+        is_favorited = !!fav;
+    }
+    
+    res.json({ ...recipe, owner, is_favorited });
 });
 
 // POST /recipes/favorite
