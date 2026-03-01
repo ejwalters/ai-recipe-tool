@@ -1,11 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, FlatList, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import CustomText from '../CustomText';
-
-const CARD_COLORS = ['#CDEFE3', '#E2E2F9', '#FFF7D1', '#D6ECFB'];
-const CARD_ICON_BG = ['#E6F6F0', '#F0F0FB', '#FFFBE7', '#EAF6FE'];
-const CARD_WIDTH = (Dimensions.get('window').width - 18 * 2 - 16) / 2;
+import { getRecipeIconConfig } from '../../utils/recipeIcons';
 
 interface RecentlyCookedSheetProps {
   recipes: any[];
@@ -15,13 +12,12 @@ interface RecentlyCookedSheetProps {
 
 export default function RecentlyCookedSheet({ recipes, router, onClose }: RecentlyCookedSheetProps) {
   const renderItem = ({ item, index }: { item: any; index: number }) => {
-    const cardColor = CARD_COLORS[index % CARD_COLORS.length];
-    const iconBg = CARD_ICON_BG[index % CARD_ICON_BG.length];
+    const iconConfig = getRecipeIconConfig(item.title || '', item.tags || [], index, item);
     return (
       <TouchableOpacity
         key={item.id || index}
-        style={[styles.card, { backgroundColor: cardColor }]}
-        activeOpacity={0.88}
+        style={styles.card}
+        activeOpacity={0.9}
         onPress={() => router.push({ 
           pathname: '/recipe-detail', 
           params: { 
@@ -30,34 +26,29 @@ export default function RecentlyCookedSheet({ recipes, router, onClose }: Recent
           } 
         })}
       >
-        <View style={[styles.cardImageWrapper, { backgroundColor: iconBg }]}> 
-          {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={styles.cardImage} />
+        <View style={[styles.iconSquare, { backgroundColor: iconConfig.backgroundColor }]}>
+          {iconConfig.library === 'MaterialCommunityIcons' ? (
+            <MaterialCommunityIcons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
           ) : (
-            <Ionicons name="fast-food-outline" size={32} color="#B0B0B0" />
+            <Ionicons name={iconConfig.name as any} size={28} color={iconConfig.iconColor} />
           )}
         </View>
-        <CustomText style={styles.cardTitle} numberOfLines={2}>{item.title || 'No name'}</CustomText>
-        {/* Ingredients pill below title */}
-        <View style={styles.metaPillWrapper}>
-          <View style={styles.metaPill}>
-            <Ionicons name="list-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
-            <CustomText style={styles.metaPillText}>{Array.isArray(item.ingredients) ? item.ingredients.length : 0} ingredients</CustomText>
+        <View style={styles.cardContent}>
+          <CustomText style={styles.cardTitle} numberOfLines={2}>{item.title || 'Untitled Recipe'}</CustomText>
+          <View style={styles.metaRow}>
+            {item.time && (
+              <View style={styles.metaItem}>
+                <Ionicons name="time-outline" size={14} color="#6B7280" />
+                <CustomText style={styles.metaText}>{item.time} min</CustomText>
+              </View>
+            )}
+            <View style={styles.metaItem}>
+              <Ionicons name="list-outline" size={14} color="#6B7280" />
+              <CustomText style={styles.metaText}>{Array.isArray(item.ingredients) ? item.ingredients.length : 0} ingredients</CustomText>
+            </View>
           </View>
         </View>
-        {/* Time pill below ingredients */}
-        <View style={styles.metaPillWrapper}>
-          <View style={styles.metaPill}>
-            <Ionicons name="time-outline" size={14} color="#6B7280" style={{ marginRight: 4 }} />
-            <CustomText style={styles.metaPillText}>{item.time || '—'}</CustomText>
-          </View>
-        </View>
-        <Ionicons
-          name={'heart-outline'}
-          size={22}
-          color={'#B0B0B0'}
-          style={styles.cardHeart}
-        />
+        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
       </TouchableOpacity>
     );
   };
@@ -84,9 +75,7 @@ export default function RecentlyCookedSheet({ recipes, router, onClose }: Recent
           data={recipes}
           renderItem={renderItem}
           keyExtractor={(item, idx) => item.id ? String(item.id) : String(idx)}
-          numColumns={2}
-          contentContainerStyle={styles.gridContent}
-          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -140,98 +129,57 @@ const styles = StyleSheet.create({
     fontSize: 17,
     marginTop: 32,
   },
-  gridContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 100, // Increased to ensure last card is visible above tab bar
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
     paddingTop: 0,
   },
-  gridRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
   card: {
-    width: CARD_WIDTH,
-    borderRadius: 22,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: 'rgba(0, 0, 0, 0.05)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
-    position: 'relative',
-    marginTop: 4,
-    backgroundColor: '#fff',
-    minHeight: 200,
   },
-  cardImageWrapper: {
+  iconSquare: {
     width: 56,
     height: 56,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginRight: 16,
   },
-  cardImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    resizeMode: 'cover',
+  cardContent: {
+    flex: 1,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    textAlign: 'center',
-    marginBottom: 8,
-    minHeight: 44,
-  },
-  cardMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    // marginBottom: 4, // Remove to keep inside card
-    // marginTop: 2, // Remove to keep inside card
-    marginTop: 8, // Add a little space below title
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginHorizontal: 3,
-    // marginTop: 2, // Remove to keep inside card
-  },
-  metaPillText: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 17,
     fontWeight: '600',
-  },
-  cardHeart: {
-    position: 'absolute',
-    top: 18,
-    right: 18,
-  },
-  topMetaWrapper: {
-    width: '100%',
-    alignItems: 'center',
+    color: '#1F2937',
     marginBottom: 6,
-    marginTop: 2,
   },
-  bottomMetaWrapper: {
-    width: '100%',
+  metaRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 2,
+    flexWrap: 'wrap',
+    gap: 16,
   },
-  metaPillWrapper: {
-    width: '100%',
+  metaItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
 }); 

@@ -525,16 +525,21 @@ export default function HomeScreen() {
   return (
     <TouchableWithoutFeedback onPress={closeDropdown} accessible={false}>
       <View style={styles.container}>
-        <SafeAreaView style={{ flex: 0, backgroundColor: '#F3F0FF' }} edges={['top']}>
+        <View 
+          style={[
+            styles.headerBackgroundFill, 
+            { height: insets.top + 120 } 
+          ]} 
+          pointerEvents="none"
+        />
+        <SafeAreaView style={{ flex: 0, backgroundColor: 'transparent', zIndex: 1 }} edges={['top']}>
           {/* Enhanced Header */}
-          <View style={[styles.headerBg, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
+          <View style={[styles.headerBg, { paddingTop: Math.max(insets.top - 36, 0) }]}>
             <View style={styles.headerRow}>
-              <View style={styles.logoContainer}>
-                <View style={styles.logoBadge}>
-                  <CustomText style={styles.logoText}>🍳</CustomText>
-                </View>
+              <View style={styles.greetingContainer}>
+                <CustomText style={styles.greetingTime}>{greeting}</CustomText>
+                <CustomText style={styles.greetingText}>{userName}!</CustomText>
               </View>
-              <View style={{ flex: 1 }} />
               <TouchableOpacity 
                 onPress={() => router.push('/(tabs)/profile')}
                 activeOpacity={0.8}
@@ -555,16 +560,11 @@ export default function HomeScreen() {
                 </View>
               </TouchableOpacity>
             </View>
-            
-            <View style={styles.greetingContainer}>
-              <CustomText style={styles.greetingTime}>{greeting}</CustomText>
-              <CustomText style={styles.greetingText}>{userName}!</CustomText>
-            </View>
           </View>
         </SafeAreaView>
 
         {/* Main Content */}
-        <View style={styles.contentWrapper}>
+        <View style={[styles.contentWrapper, { zIndex: 1 }]}>
           {/* Enhanced Search Bar */}
           <Animated.View 
             style={[
@@ -857,44 +857,27 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAFA',
+  },
+  headerBackgroundFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#F3F0FF',
+    zIndex: 0,
   },
   headerBg: {
-    backgroundColor: '#F3F0FF',
-    paddingBottom: 24,
+    backgroundColor: 'transparent',
+    paddingBottom: 12,
     paddingHorizontal: 24,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#256D85',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  logoText: {
-    fontSize: 24,
+    justifyContent: 'space-between',
   },
   avatarContainer: {
     shadowColor: '#000',
@@ -904,9 +887,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
@@ -917,25 +900,25 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   greetingContainer: {
-    marginTop: 4,
+    flex: 1,
   },
   greetingTime: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
-    marginBottom: 4,
+    marginBottom: 0,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   greetingText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1F2937',
-    marginBottom: 6,
+    marginBottom: 0,
     letterSpacing: -0.5,
   },
   subGreeting: {
@@ -950,8 +933,8 @@ const styles = StyleSheet.create({
   },
   searchBarWrapper: {
     alignItems: 'center',
-    marginTop: -20,
-    marginBottom: 24,
+    marginTop: 8,
+    marginBottom: 8,
     paddingHorizontal: 24,
     zIndex: 10,
   },
@@ -959,11 +942,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingHorizontal: 20,
-    height: 56,
+    paddingHorizontal: 16,
+    height: 48,
     width: '100%',
   },
   searchBarFocused: {
@@ -1214,12 +1197,12 @@ const styles = StyleSheet.create({
   },
   // Sections
   sectionContainer: {
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 4,
   },
   quickActionsSection: {
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 4,
   },
   quickActionsTitleContainer: {
     paddingHorizontal: 24,
@@ -1230,7 +1213,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 20,

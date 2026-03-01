@@ -868,88 +868,87 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
       <StatusBar barStyle="dark-content" />
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Hero - prominent recipe icon */}
-      <View style={[styles.heroSection, { backgroundColor: iconConfig.backgroundColor, paddingTop: insets.top + 12 }]}>
-        <View style={styles.heroIconWrapper}>
-          <View style={styles.heroIcon}>
-            {iconConfig.library === 'MaterialCommunityIcons' ? (
-              <MaterialCommunityIcons name={iconConfig.name as any} size={48} color={iconConfig.iconColor} />
-            ) : (
-              <Ionicons name={iconConfig.name as any} size={48} color={iconConfig.iconColor} />
-            )}
-          </View>
-        </View>
-        {recipe?.owner && (
-          <View style={styles.ownerRow}>
-            <Ionicons name="person-circle-outline" size={16} color="rgba(31,41,55,0.7)" />
-            <CustomText style={styles.ownerText}>{recipe.owner.display_name}</CustomText>
-          </View>
-        )}
-        <View style={[styles.floatingActions, { top: insets.top + 8 }]}>
-          <TouchableOpacity style={styles.floatingBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      {/* Integrated header - back/favorite above, then icon + title/meta/tags/actions */}
+      <View style={[styles.heroSection, { backgroundColor: iconConfig.backgroundColor, paddingTop: Math.max(insets.top - 30, 0) }]}>
+        {/* Top row: back button left, favorite button right */}
+        <View style={styles.topActions}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={24} color="#1F2937" />
           </TouchableOpacity>
           {!isAIRecipe && (
-            <TouchableOpacity style={[styles.floatingBtn, { position: 'absolute', right: 20 }]} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <TouchableOpacity style={styles.headerBtn} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               {favorited ? <HeartIcon color="#E4576A" size={24} /> : <Heart color="#1F2937" size={24} />}
             </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      {/* Content card - white, rounded top */}
-      <View style={styles.contentCard}>
-        <CustomText style={styles.detailTitle}>{recipe.title}</CustomText>
-        <View style={styles.detailMetaRow}>
-          <View style={styles.detailMetaItem}>
-            <Ionicons name="time-outline" size={16} color="#6B7280" />
-            <CustomText style={styles.detailMetaText}>{recipe.time}</CustomText>
-          </View>
-          <View style={styles.detailMetaItem}>
-            <Ionicons name="restaurant-outline" size={16} color="#6B7280" />
-            <CustomText style={styles.detailMetaText}>{ingredients.length} ingredients</CustomText>
-          </View>
-        </View>
-        {tags.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.detailTags}>
-            {tags.map((tag: string, idx: number) => {
-              const tagStyle = getTagStyle(idx);
-              return (
-                <View key={idx} style={[styles.detailTag, { backgroundColor: tagStyle.bg }]}>
-                  <CustomText style={[styles.detailTagText, { color: tagStyle.text }]}>{tag}</CustomText>
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-        <View style={styles.detailActions}>
-            {!isAIRecipe && recipe.user_id === userId && (
-              <TouchableOpacity 
-                style={styles.detailEditBtn} 
-                onPress={handleEditRecipe}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Ionicons name="create-outline" size={16} color="#256D85" />
-                <CustomText style={styles.detailEditBtnText}>Edit</CustomText>
-              </TouchableOpacity>
+        <View style={styles.heroRow}>
+          <View style={styles.heroIcon}>
+            {iconConfig.library === 'MaterialCommunityIcons' ? (
+              <MaterialCommunityIcons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
+            ) : (
+              <Ionicons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
             )}
-            {isAIRecipe && !saved && (
-              <TouchableOpacity 
-                style={styles.detailActionBtnPrimary} 
-                onPress={handleSaveRecipe}
-                disabled={saving}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Book color="#fff" size={18} />
-                <CustomText style={styles.detailActionBtnPrimaryText}>Save to collection</CustomText>
-              </TouchableOpacity>
-            )}
-            {isAIRecipe && saved && (
-              <View style={styles.detailActionBtnSaved}>
-                <BookIcon color="#256D85" size={18} />
-                <CustomText style={styles.detailActionBtnSavedText}>Saved</CustomText>
+          </View>
+          <View style={styles.heroContent}>
+            <CustomText style={styles.detailTitle} numberOfLines={2}>{recipe.title}</CustomText>
+            <View style={styles.detailMetaRow}>
+              <View style={styles.detailMetaItem}>
+                <Ionicons name="time-outline" size={14} color="#6B7280" />
+                <CustomText style={styles.detailMetaText}>{recipe.time}</CustomText>
+              </View>
+              <View style={styles.detailMetaItem}>
+                <Ionicons name="restaurant-outline" size={14} color="#6B7280" />
+                <CustomText style={styles.detailMetaText}>{ingredients.length} ingredients</CustomText>
+              </View>
+            </View>
+            {recipe?.owner && (
+              <View style={styles.ownerRow}>
+                {recipe.owner.avatar_url ? (
+                  <Image source={{ uri: recipe.owner.avatar_url }} style={styles.ownerAvatar} />
+                ) : (
+                  <Ionicons name="person-circle-outline" size={14} color="rgba(31,41,55,0.7)" />
+                )}
+                <CustomText style={styles.ownerText}>{recipe.owner.display_name}</CustomText>
               </View>
             )}
+            {tags.length > 0 && (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.detailTags}
+                contentContainerStyle={styles.detailTagsContent}
+              >
+                {tags.map((tag: string, idx: number) => {
+                  const tagStyle = getTagStyle(idx);
+                  return (
+                    <View key={idx} style={[styles.detailTag, { backgroundColor: tagStyle.bg }]}>
+                      <CustomText style={[styles.detailTagText, { color: tagStyle.text }]}>{tag}</CustomText>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <View style={styles.detailActions}>
+              {!isAIRecipe && recipe.user_id === userId && (
+                <TouchableOpacity style={styles.detailEditBtn} onPress={handleEditRecipe} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Ionicons name="create-outline" size={16} color="#256D85" />
+                  <CustomText style={styles.detailEditBtnText}>Edit</CustomText>
+                </TouchableOpacity>
+              )}
+              {isAIRecipe && !saved && (
+                <TouchableOpacity style={styles.detailActionBtnPrimary} onPress={handleSaveRecipe} disabled={saving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Book color="#fff" size={18} />
+                  <CustomText style={styles.detailActionBtnPrimaryText}>Save to collection</CustomText>
+                </TouchableOpacity>
+              )}
+              {isAIRecipe && saved && (
+                <View style={styles.detailActionBtnSaved}>
+                  <BookIcon color="#256D85" size={18} />
+                  <CustomText style={styles.detailActionBtnSavedText}>Saved</CustomText>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       </View>
 
@@ -995,7 +994,7 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
 
       <ScrollView 
         style={styles.content} 
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Cooking Timer */}
@@ -1541,46 +1540,64 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F5FB',
   },
   heroSection: {
-    paddingBottom: 80,
-    paddingHorizontal: 24,
-    alignItems: 'center',
+    paddingBottom: 12,
+    paddingHorizontal: 20,
   },
-  heroIconWrapper: {
-    marginTop: 8,
+  topActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   heroIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
     shadowColor: 'rgba(0,0,0,0.1)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  heroContent: {
+    flex: 1,
   },
   ownerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 2,
+  },
+  ownerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   ownerText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     color: 'rgba(31,41,55,0.8)',
   },
-  floatingActions: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   floatingBtn: {
     width: 44,
@@ -1595,34 +1612,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  contentCard: {
-    backgroundColor: '#fff',
-    marginTop: -48,
-    marginHorizontal: 20,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 8,
-  },
   detailTitle: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 12,
+    marginBottom: 4,
     letterSpacing: -0.5,
-    lineHeight: 32,
+    lineHeight: 26,
   },
   detailMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
-    marginBottom: 16,
+    gap: 14,
+    marginBottom: 4,
   },
   detailMetaItem: {
     flexDirection: 'row',
@@ -1630,12 +1632,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailMetaText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
   },
   detailTags: {
-    marginBottom: 20,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  detailTagsContent: {
+    paddingRight: 24,
   },
   detailTag: {
     paddingHorizontal: 12,
@@ -1651,7 +1657,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    marginTop: 2,
   },
   detailEditBtn: {
     flexDirection: 'row',
@@ -1831,7 +1838,7 @@ const styles = StyleSheet.create({
   },
   successToast: {
     position: 'absolute',
-    top: 120,
+    top: 90,
     left: 20,
     right: 20,
     backgroundColor: '#48BB78',
@@ -1979,11 +1986,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   timerContainer: {
-    padding: 24,
+    padding: 16,
     backgroundColor: '#fff',
     marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 12,
+    marginTop: 12,
+    marginBottom: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EEF2FF',
@@ -1995,12 +2002,12 @@ const styles = StyleSheet.create({
   },
   cookButton: {
     backgroundColor: '#1B5B6B',
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -2016,17 +2023,17 @@ const styles = StyleSheet.create({
   },
   cookButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 16,
     paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 20,
@@ -2042,8 +2049,8 @@ const styles = StyleSheet.create({
   },
   ingredientsList: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 16,
+    padding: 14,
     shadowColor: 'rgba(15, 23, 42, 0.08)',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
@@ -2055,7 +2062,7 @@ const styles = StyleSheet.create({
   ingredientItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F7FAFC',
   },
@@ -2092,8 +2099,8 @@ const styles = StyleSheet.create({
   },
   stepsList: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 16,
+    padding: 14,
     shadowColor: 'rgba(15, 23, 42, 0.08)',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
@@ -2103,8 +2110,8 @@ const styles = StyleSheet.create({
     borderColor: '#EEF2FF',
   },
   stepItem: {
-    marginBottom: 16,
-    borderRadius: 12,
+    marginBottom: 12,
+    borderRadius: 10,
     backgroundColor: '#F7FAFC',
     overflow: 'hidden',
   },
@@ -2114,7 +2121,7 @@ const styles = StyleSheet.create({
   stepContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 16,
+    padding: 12,
   },
   stepNumber: {
     width: 32,
