@@ -94,6 +94,32 @@ router.put('/:id', async (req, res) => {
     res.json(data);
 });
 
+// DELETE /recipes/:id (owner only)
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const user_id = req.body?.user_id || req.query?.user_id;
+    if (!user_id) {
+        return res.status(400).json({ error: 'user_id required' });
+    }
+    const { data: existingRecipe, error: fetchError } = await supabase
+        .from('recipes')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+    if (fetchError) {
+        return res.status(404).json({ error: 'Recipe not found' });
+    }
+    if (existingRecipe.user_id !== user_id) {
+        return res.status(403).json({ error: 'You can only delete your own recipes' });
+    }
+    const { error: deleteError } = await supabase
+        .from('recipes')
+        .delete()
+        .eq('id', id);
+    if (deleteError) return res.status(500).json({ error: deleteError.message });
+    res.json({ success: true });
+});
+
 // GET /recipes/list
 router.get('/list', async (req, res) => {
     let { limit, q, user_id, filter_by_user } = req.query;

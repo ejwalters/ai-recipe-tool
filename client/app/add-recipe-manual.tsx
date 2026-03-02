@@ -327,9 +327,7 @@ export default function AddRecipeManualScreen() {
                         <Ionicons name="arrow-back" size={24} color="#1F2937" />
                     </TouchableOpacity>
                     <CustomText style={styles.headerTitle}>Add Recipe</CustomText>
-                    <TouchableOpacity style={styles.menuButton}>
-                        <Ionicons name="ellipsis-vertical" size={24} color="#1F2937" />
-                    </TouchableOpacity>
+                    <View style={styles.headerSpacer} />
                 </View>
             </View>
 
@@ -643,8 +641,8 @@ const styles = StyleSheet.create({
         color: '#1F2937',
         letterSpacing: -0.3,
     },
-    menuButton: {
-        padding: 4,
+    headerSpacer: {
+        width: 40,
     },
     scrollView: {
         flex: 1,

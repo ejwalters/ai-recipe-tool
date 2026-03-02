@@ -803,6 +803,40 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
     setShowEditModal(false);
   };
 
+  const handleDeleteRecipe = () => {
+    Alert.alert(
+      'Delete Recipe',
+      'Are you sure? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { data } = await supabase.auth.getUser();
+            const user_id = data?.user?.id;
+            if (!user_id) return;
+            try {
+              const response = await fetch(`https://familycooksclean.onrender.com/recipes/${recipe.id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id }),
+              });
+              if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to delete recipe');
+              }
+              setShowEditModal(false);
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete recipe');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleShare = async () => {
     try {
       await Share.share({
@@ -1527,6 +1561,13 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
                 )}
               </TouchableOpacity>
             </View>
+            <TouchableOpacity 
+              style={styles.editDeleteButton} 
+              onPress={handleDeleteRecipe}
+            >
+              <Ionicons name="trash-outline" size={18} color="#DC2626" />
+              <CustomText style={styles.editDeleteButtonText}>Delete Recipe</CustomText>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -2946,6 +2987,24 @@ const styles = StyleSheet.create({
   editSaveButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  editDeleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginTop: 16,
+    marginHorizontal: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+  },
+  editDeleteButtonText: {
+    color: '#DC2626',
+    fontSize: 15,
     fontWeight: '600',
   },
 }); 
