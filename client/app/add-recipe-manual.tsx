@@ -8,6 +8,23 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../lib/supabase';
 import { getRecipeIconConfig, IconConfig } from '../utils/recipeIcons';
 
+async function parseRecipeResponse(response: Response) {
+    const text = await response.text();
+    if (!response.ok) {
+        let msg = 'Failed to add recipe';
+        try {
+            const json = JSON.parse(text);
+            msg = json.error || msg;
+        } catch {
+            if (text.startsWith('<') || response.status >= 502) {
+                msg = 'The recipe service is temporarily unavailable. Please try again in a moment.';
+            }
+        }
+        throw new Error(msg);
+    }
+    return text ? JSON.parse(text) : null;
+}
+
 // Helper to call backend
 async function addRecipeToServer({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }: { user_id: string; title: string; description?: string; time: string; servings: string; tags: string[]; ingredients: string[]; steps: string[]; icon_library?: string; icon_name?: string; icon_bg_color?: string; icon_color?: string }) {
     const response = await fetch('https://familycooksclean.onrender.com/recipes/add', {
@@ -15,8 +32,7 @@ async function addRecipeToServer({ user_id, title, description, time, servings, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }),
     });
-    if (!response.ok) throw new Error('Failed to add recipe');
-    return response.json();
+    return parseRecipeResponse(response);
 }
 
 // Helper to update recipe on backend
@@ -26,8 +42,20 @@ async function updateRecipeOnServer({ recipeId, user_id, title, description, tim
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id, title, description, time, servings, tags, ingredients, steps, icon_library, icon_name, icon_bg_color, icon_color }),
     });
-    if (!response.ok) throw new Error('Failed to update recipe');
-    return response.json();
+    const text = await response.text();
+    if (!response.ok) {
+        let msg = 'Failed to update recipe';
+        try {
+            const json = JSON.parse(text);
+            msg = json.error || msg;
+        } catch {
+            if (text.startsWith('<') || response.status >= 502) {
+                msg = 'The recipe service is temporarily unavailable. Please try again in a moment.';
+            }
+        }
+        throw new Error(msg);
+    }
+    return text ? JSON.parse(text) : null;
 }
 
 // Popular icon options for selection
