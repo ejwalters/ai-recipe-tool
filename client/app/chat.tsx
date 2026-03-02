@@ -5,6 +5,7 @@ import CustomText from '../components/CustomText';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getRecipeIconConfig } from '../utils/recipeIcons';
 
@@ -123,7 +124,7 @@ const AITypingIndicator = () => {
     );
 };
 
-export const HEADER_HEIGHT = Platform.OS === 'ios' ? 120 : 100;
+export const HEADER_HEIGHT = Platform.OS === 'ios' ? 88 : 76;
 
 // Helper to extract JSON from a string (handles code blocks and extra text)
 function extractJsonFromString(str: string) {
@@ -212,6 +213,7 @@ const RecipeCardMessage = ({ message, onPress, onSave, saved }: { message: any; 
 
 export default function ChatScreen() {
     const router = useRouter();
+    const navigation = useNavigation();
     const { chat_id, initialMessage } = useLocalSearchParams();
     const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<any[]>([]);
@@ -223,7 +225,8 @@ export default function ChatScreen() {
     const [message, setMessage] = useState(initialMessage ? decodeURIComponent(String(initialMessage)) : '');
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const scrollViewRef = useRef<ScrollView>(null);
-    const inputBottomOffset = useRef(new Animated.Value(0)).current;
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
 
     // Fetch user ID and profile on mount
     useEffect(() => {
@@ -395,51 +398,48 @@ export default function ChatScreen() {
         }, [currentChatId])
     );
 
-    // Scroll to bottom when messages change
+    // Scroll to bottom when messages change so user message + typing indicator stay in view.
+    // When AI is typing, run multiple scroll attempts so one runs after layout (keyboard + list).
     useEffect(() => {
-        if (scrollViewRef.current) {
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 100);
+        if (scrollViewRef.current && messages.length > 0) {
+            const hasTyping = messages.some(m => m.isTyping);
+            const delays = hasTyping ? [0, 120, 280, 500] : [100];
+            const timeouts = delays.map(delay =>
+                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), delay)
+            );
+            return () => timeouts.forEach(t => clearTimeout(t));
         }
     }, [messages]);
 
-    // Handle keyboard show/hide events
+    // Track keyboard height for input padding; scroll to end when keyboard opens so latest messages stay visible
     useEffect(() => {
         const keyboardWillShowListener = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
             (e) => {
-                const height = e.endCoordinates.height;
-                setKeyboardHeight(height);
-                // Push input up by keyboard height plus a small buffer to ensure full visibility
-                Animated.timing(inputBottomOffset, {
-                    toValue: height,
-                    duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
-                    useNativeDriver: false,
-                }).start();
+                setKeyboardHeight(e.endCoordinates.height);
+                // After KeyboardAvoidingView resizes the list, scroll so user message + typing indicator are in view
+                const duration = Platform.OS === 'ios' ? (e.duration || 250) + 150 : 400;
                 setTimeout(() => {
                     scrollViewRef.current?.scrollToEnd({ animated: true });
-                }, 100);
+                }, duration);
             }
         );
 
         const keyboardWillHideListener = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            (e) => {
-                setKeyboardHeight(0);
-                Animated.timing(inputBottomOffset, {
-                    toValue: 0,
-                    duration: Platform.OS === 'ios' ? e.duration || 250 : 200,
-                    useNativeDriver: false,
-                }).start();
-            }
+            () => setKeyboardHeight(0)
         );
 
         return () => {
             keyboardWillShowListener.remove();
             keyboardWillHideListener.remove();
         };
-    }, [inputBottomOffset]);
+    }, []);
+
+    // Disable modal swipe-to-dismiss when keyboard is open (drag dismisses keyboard instead); enable when keyboard closed
+    useEffect(() => {
+        navigation.setOptions({ gestureEnabled: keyboardHeight === 0 });
+    }, [keyboardHeight, navigation]);
 
     const handleSuggestionPress = async (suggestionText: string) => {
         if (!userId) return;
@@ -551,27 +551,22 @@ export default function ChatScreen() {
         setMessage(''); // Clear input immediately
         setSending(true);
         
-        // Immediately add user message to chat
+        // Add user message and typing indicator in one update so scroll shows both
         setMessages(prev => [
             ...prev,
-            { 
+            {
                 id: `user-${Date.now()}`,
                 text: userMessage,
                 createdAt: new Date(),
-                role: 'user'
-            }
-        ]);
-        
-        // Add typing indicator
-        setMessages(prev => [
-            ...prev,
-            { 
+                role: 'user',
+            },
+            {
                 id: 'typing-indicator',
                 text: '[TYPING]',
                 createdAt: new Date(),
                 role: 'assistant',
-                isTyping: true
-            }
+                isTyping: true,
+            },
         ]);
         
         try {
@@ -682,17 +677,16 @@ export default function ChatScreen() {
                     <CustomText style={styles.headerTitle}>AI Chef Assistant</CustomText>
                     <CustomText style={styles.headerSubtitle}>Ask me anything about recipes</CustomText>
                 </View>
-                <TouchableOpacity 
-                    style={styles.headerMenuButton}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Ionicons name="ellipsis-vertical" size={24} color={PALETTE.headerText} />
-                </TouchableOpacity>
+                <View style={styles.headerSpacer} />
             </View>
             
-            {/* Chat Messages and Input - Wrapped in KeyboardAvoidingView */}
-            <View style={{ flex: 1 }}>
-                {/* Chat Messages */}
+            {/* Chat body + input: KeyboardAvoidingView so the message list resizes when keyboard opens (messages stay in view) */}
+            <KeyboardAvoidingView
+                style={{ flex: 1, backgroundColor: PALETTE.chatBackground }}
+                behavior="padding"
+                keyboardVerticalOffset={HEADER_HEIGHT}
+            >
+                {/* Chat Messages - this area shrinks when keyboard is open */}
                 <View style={styles.chatAreaBg}>
                     <View style={styles.chatGradient}>
                         <ScrollView 
@@ -701,8 +695,14 @@ export default function ChatScreen() {
                             contentContainerStyle={styles.messagesContent}
                             showsVerticalScrollIndicator={false}
                             keyboardShouldPersistTaps="handled"
-                            keyboardDismissMode="interactive"
-                            automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+                            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                            onContentSizeChange={() => {
+                                const list = messagesRef.current;
+                                const last = list[list.length - 1];
+                                if (last?.isTyping && scrollViewRef.current) {
+                                    scrollViewRef.current.scrollToEnd({ animated: true });
+                                }
+                            }}
                         >
                     {/* Show welcome section for new chats */}
                     {messages.length === 0 && (
@@ -915,46 +915,45 @@ export default function ChatScreen() {
             </View>
             </View>
             
-            {/* Input Bar */}
-            <Animated.View 
-                style={[
-                    styles.safeAreaInput, 
-                    { 
-                        marginBottom: inputBottomOffset,
-                        paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom,
-                    }
-                ]}
-            >
+                {/* Input Bar - negative margin pulls input closer to keyboard */}
+                <View 
+                    style={[
+                        styles.safeAreaInput, 
+                        { paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom }
+                    ]}
+                >
                 <View style={styles.inputContainer}>
-                    {/* Suggestion Chips */}
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.suggestionChipsContainer}
-                        contentContainerStyle={styles.suggestionChipsContent}
-                    >
-                        <TouchableOpacity 
-                            style={styles.suggestionChip}
-                            onPress={() => setMessage('Vegetarian options')}
-                            activeOpacity={0.7}
+                    {/* Suggestion chips hidden when keyboard is open so message list has room to show your prompt + AI response */}
+                    {keyboardHeight === 0 && (
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.suggestionChipsContainer}
+                            contentContainerStyle={styles.suggestionChipsContent}
                         >
-                            <CustomText style={styles.suggestionChipText}>Vegetarian options</CustomText>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={styles.suggestionChip}
-                            onPress={() => setMessage('30-min meals')}
-                            activeOpacity={0.7}
-                        >
-                            <CustomText style={styles.suggestionChipText}>30-min meals</CustomText>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={styles.suggestionChip}
-                            onPress={() => setMessage('Low carb')}
-                            activeOpacity={0.7}
-                        >
-                            <CustomText style={styles.suggestionChipText}>Low carb</CustomText>
-                        </TouchableOpacity>
-                    </ScrollView>
+                            <TouchableOpacity 
+                                style={styles.suggestionChip}
+                                onPress={() => setMessage('Vegetarian options')}
+                                activeOpacity={0.7}
+                            >
+                                <CustomText style={styles.suggestionChipText}>Vegetarian options</CustomText>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.suggestionChip}
+                                onPress={() => setMessage('30-min meals')}
+                                activeOpacity={0.7}
+                            >
+                                <CustomText style={styles.suggestionChipText}>30-min meals</CustomText>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.suggestionChip}
+                                onPress={() => setMessage('Low carb')}
+                                activeOpacity={0.7}
+                            >
+                                <CustomText style={styles.suggestionChipText}>Low carb</CustomText>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    )}
                     
                     {/* Input Box */}
                     <View style={styles.inputBox}>
@@ -977,8 +976,8 @@ export default function ChatScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </Animated.View>
-            </View>
+                </View>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -1015,8 +1014,8 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 3,
         zIndex: 10,
-        paddingTop: Platform.OS === 'ios' ? 48 : 32,
-        paddingBottom: 20,
+        paddingTop: Platform.OS === 'ios' ? 44 : 24,
+        paddingBottom: 12,
         paddingHorizontal: 20,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
@@ -1033,35 +1032,32 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: PALETTE.headerText,
         textAlign: 'center',
         letterSpacing: -0.3,
     },
     headerSubtitle: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#6B7280',
         textAlign: 'center',
-        marginTop: 4,
+        marginTop: 2,
         fontWeight: '500',
     },
-    headerMenuButton: {
+    headerSpacer: {
         width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     chatAreaBg: {
         flex: 1,
+        minHeight: 0,
         marginTop: HEADER_HEIGHT,
         overflow: 'hidden',
         backgroundColor: PALETTE.chatBackground,
     },
     chatGradient: {
         flex: 1,
-        paddingTop: 20,
+        paddingTop: 4,
         backgroundColor: PALETTE.chatBackground,
     },
     messagesContainer: {
@@ -1198,6 +1194,7 @@ const styles = StyleSheet.create({
     },
     safeAreaInput: {
         backgroundColor: PALETTE.chatBackground,
+        flexShrink: 0,
     },
     inputContainer: {
         backgroundColor: 'transparent',

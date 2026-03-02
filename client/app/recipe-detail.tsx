@@ -1541,33 +1541,35 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
               </View>
             </ScrollView>
 
-            {/* Action Buttons */}
-            <View style={styles.editModalActions}>
+            {/* Action Buttons + Delete */}
+            <View style={[styles.editModalFooter, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View style={styles.editModalActions}>
+                <TouchableOpacity 
+                  style={[styles.editModalButton, styles.editCancelButton]} 
+                  onPress={handleCancelEdit}
+                >
+                  <CustomText style={styles.editCancelButtonText}>Cancel</CustomText>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.editModalButton, styles.editSaveButton, savingEdit && styles.editSaveButtonDisabled]} 
+                  onPress={handleSaveEdit}
+                  disabled={savingEdit}
+                >
+                  {savingEdit ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <CustomText style={styles.editSaveButtonText}>Save Changes</CustomText>
+                  )}
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity 
-                style={[styles.editModalButton, styles.editCancelButton]} 
-                onPress={handleCancelEdit}
+                style={styles.editDeleteButton} 
+                onPress={handleDeleteRecipe}
               >
-                <CustomText style={styles.editCancelButtonText}>Cancel</CustomText>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.editModalButton, styles.editSaveButton, savingEdit && styles.editSaveButtonDisabled]} 
-                onPress={handleSaveEdit}
-                disabled={savingEdit}
-              >
-                {savingEdit ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <CustomText style={styles.editSaveButtonText}>Save Changes</CustomText>
-                )}
+                <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                <CustomText style={styles.editDeleteButtonText}>Delete Recipe</CustomText>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              style={styles.editDeleteButton} 
-              onPress={handleDeleteRecipe}
-            >
-              <Ionicons name="trash-outline" size={18} color="#DC2626" />
-              <CustomText style={styles.editDeleteButtonText}>Delete Recipe</CustomText>
-            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -2788,6 +2790,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     width: '100%',
+    height: '90%',
     maxHeight: '90%',
     overflow: 'hidden',
     shadowColor: '#000',
@@ -2816,6 +2819,7 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   editModalContent: {
+    flex: 1,
     paddingHorizontal: 20,
     paddingVertical: 20,
     paddingBottom: 30,
@@ -2949,15 +2953,19 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 50,
   },
+  editModalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#fff',
+  },
   editModalActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#fff',
+    paddingBottom: 12,
+    borderTopWidth: 0,
+    backgroundColor: 'transparent',
   },
   editModalButton: {
     backgroundColor: '#667EEA',
