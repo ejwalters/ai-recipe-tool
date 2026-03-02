@@ -12,7 +12,10 @@ import {
   StatusBar,
   TextInput,
   Alert,
-  Share
+  Share,
+  Platform,
+  KeyboardAvoidingView,
+  Keyboard
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,6 +24,7 @@ import CustomText from '../components/CustomText';
 import { supabase } from '../lib/supabase';
 import { getRecipeIconConfig } from '../utils/recipeIcons';
 import { useFocusEffect } from '@react-navigation/native';
+import { InteractionManager } from 'react-native';
 import { Book, BookIcon } from 'lucide-react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -162,23 +166,75 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
   const progressAnim = useRef(new Animated.Value(0)).current;
   const modalSlideAnim = useRef(new Animated.Value(0)).current;
   const resultsModalSlideAnim = useRef(new Animated.Value(0)).current;
+  const modificationInputRef = useRef<TextInput>(null);
+  const mainScrollRef = useRef<ScrollView>(null);
+  const modificationSectionY = useRef(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Animate modification modal
+  const MODIFICATION_PANEL_HEIGHT = 280;
+
+  // Track keyboard so we can add bottom padding and keep input + submit in view
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  // Animate inline modification panel (input + submit slide into view)
   useEffect(() => {
     if (showModificationSection) {
       Animated.timing(modalSlideAnim, {
         toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false, // maxHeight requires false
       }).start();
+      const task = InteractionManager.runAfterInteractions(() => {
+        modificationInputRef.current?.focus();
+      });
+      return () => task.cancel();
     } else {
       Animated.timing(modalSlideAnim, {
         toValue: 0,
         duration: 250,
-        useNativeDriver: true,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
       }).start();
     }
   }, [showModificationSection]);
+
+  // Scroll so the full modification section (label + input + buttons) is in view, not cut off
+  const scrollToModificationSection = () => {
+    const y = Math.max(0, modificationSectionY.current - 24);
+    mainScrollRef.current?.scrollTo({ y, animated: true });
+  };
+
+  // When keyboard opens with modification panel open, scroll to show full section
+  useEffect(() => {
+    if (!showModificationSection || keyboardHeight === 0) return;
+    const t1 = setTimeout(scrollToModificationSection, 150);
+    const t2 = setTimeout(scrollToModificationSection, 500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [showModificationSection, keyboardHeight]);
+
+  // When we switch to loading state, scroll so the full loading card is in view
+  useEffect(() => {
+    if (!isModifying) return;
+    const t = setTimeout(scrollToModificationSection, 100);
+    return () => clearTimeout(t);
+  }, [isModifying]);
 
   // Animate results modal
   useEffect(() => {
@@ -1026,10 +1082,21 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         </Animated.View>
       )}
 
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+      >
       <ScrollView 
+        ref={mainScrollRef}
         style={styles.content} 
-        contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 100,
+        }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Cooking Timer */}
         <Animated.View 
@@ -1159,7 +1226,10 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
         </View>
 
         {/* AI Recipe Modification Section */}
-        <View style={styles.section}>
+        <View
+          style={styles.section}
+          onLayout={(e) => { modificationSectionY.current = e.nativeEvent.layout.y; }}
+        >
           <View style={styles.sectionHeader}>
             <Ionicons name="sparkles-outline" size={20} color="#9CA3AF" />
             <CustomText style={styles.sectionTitle}>AI Recipe Modifier</CustomText>
@@ -1167,90 +1237,82 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
               Get AI suggestions to modify this recipe
             </CustomText>
           </View>
-          
-          <TouchableOpacity
-            style={styles.modifyButton}
-            onPress={() => setShowModificationSection(true)}
-            activeOpacity={0.8}
+
+          <View pointerEvents={showModificationSection ? 'none' : 'auto'} style={showModificationSection ? styles.modifyButtonHidden : undefined}>
+            <TouchableOpacity
+              style={styles.modifyButton}
+              onPress={() => setShowModificationSection(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="sparkles" size={20} color="#256D85" />
+              <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
+            </TouchableOpacity>
+          </View>
+
+          {/* Inline slide-in: input + submit (no modal) */}
+          <Animated.View
+            style={[
+              styles.modificationPanelWrap,
+              {
+                maxHeight: modalSlideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, MODIFICATION_PANEL_HEIGHT],
+                }),
+                opacity: modalSlideAnim,
+              },
+            ]}
+            pointerEvents={showModificationSection ? 'auto' : 'none'}
           >
-            <Ionicons name="sparkles" size={20} color="#256D85" />
-            <CustomText style={styles.modifyButtonText}>Modify Recipe with AI</CustomText>
-          </TouchableOpacity>
+            <View style={styles.modificationPanel}>
+              {isModifying ? (
+                <View style={styles.modificationLoadingState}>
+                  <ModificationLoadingIndicator />
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    ref={modificationInputRef}
+                    style={styles.modificationInput}
+                    placeholder="Describe how you'd like to modify this recipe..."
+                    placeholderTextColor="#A0AEC0"
+                    value={modificationPrompt}
+                    onChangeText={setModificationPrompt}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    onFocus={() => {
+                      setTimeout(scrollToModificationSection, 300);
+                      setTimeout(scrollToModificationSection, 600);
+                    }}
+                  />
+                  <View style={styles.modificationPanelActions}>
+                    <TouchableOpacity
+                      onPress={() => setShowModificationSection(false)}
+                      style={styles.modificationCancelButton}
+                      activeOpacity={0.7}
+                    >
+                      <CustomText style={styles.modificationCancelText}>Cancel</CustomText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.submitButton, styles.submitButtonFlex, !modificationPrompt.trim() && styles.submitButtonDisabled]}
+                      onPress={handleModifyRecipe}
+                      disabled={!modificationPrompt.trim()}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="sparkles" size={16} color="#fff" />
+                      <CustomText style={styles.submitButtonText}>Generate Modifications</CustomText>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </Animated.View>
         </View>
 
         {/* Bottom spacing */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
-
-      {/* AI Modification Modal */}
-      {showModificationSection && (
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop} 
-            onPress={() => setShowModificationSection(false)}
-            activeOpacity={1}
-          />
-          <Animated.View 
-            style={[
-              styles.modalContainer,
-              { 
-                transform: [{ 
-                  translateY: modalSlideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [300, 0]
-                  })
-                }] 
-              }
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <CustomText style={styles.modalTitle}>Modify Recipe</CustomText>
-              <TouchableOpacity 
-                onPress={() => setShowModificationSection(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.modalContent}>
-              <TextInput
-                style={styles.modificationInput}
-                placeholder="Describe how you'd like to modify this recipe..."
-                placeholderTextColor="#A0AEC0"
-                value={modificationPrompt}
-                onChangeText={setModificationPrompt}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-              
-              <TouchableOpacity
-                style={[styles.submitButton, !modificationPrompt.trim() && styles.submitButtonDisabled]}
-                onPress={handleModifyRecipe}
-                disabled={!modificationPrompt.trim() || isModifying}
-                activeOpacity={0.8}
-              >
-                {isModifying ? (
-                  <>
-                    <Ionicons name="sparkles" size={16} color="#fff" style={{ marginRight: 8 }} />
-                    <CustomText style={styles.submitButtonText}>Generating...</CustomText>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={16} color="#fff" />
-                    <CustomText style={styles.submitButtonText}>Generate Modifications</CustomText>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {isModifying && (
-                <ModificationLoadingIndicator />
-              )}
-            </View>
-          </Animated.View>
-        </View>
-      )}
+      </KeyboardAvoidingView>
 
       {/* Modified Recipe Results Modal */}
       {showModifiedRecipe && modifiedRecipe && (
@@ -2028,6 +2090,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   timerContainer: {
     padding: 16,
     backgroundColor: '#fff',
@@ -2234,6 +2299,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
+  modifyButtonHidden: {
+    maxHeight: 0,
+    opacity: 0,
+    overflow: 'hidden',
+    marginBottom: 0,
+    paddingVertical: 0,
+  },
+  modificationPanelWrap: {
+    overflow: 'hidden',
+  },
+  modificationPanel: {
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  modificationLoadingState: {
+    minHeight: 240,
+    justifyContent: 'center',
+  },
+  modificationPanelActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  modificationCancelButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  modificationCancelText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
   modificationContainer: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -2289,6 +2387,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  submitButtonFlex: {
+    flex: 1,
+  },
   submitButtonDisabled: {
     backgroundColor: '#A0AEC0',
     shadowOpacity: 0,
@@ -2301,7 +2402,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   modLoadingCard: {
-    marginTop: 18,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderRadius: 20,
     padding: 18,
@@ -2316,7 +2416,7 @@ const styles = StyleSheet.create({
   modLoadingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   modLoadingIcon: {
     width: 34,
@@ -2341,7 +2441,7 @@ const styles = StyleSheet.create({
   modLoadingStepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   modLoadingStepText: {
     color: '#3B518A',
@@ -2351,7 +2451,7 @@ const styles = StyleSheet.create({
   modLoadingProgressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   modLoadingDot: {
     width: 8,

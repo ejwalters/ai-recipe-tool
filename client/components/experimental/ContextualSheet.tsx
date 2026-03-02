@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Dimensions, StyleSheet, View, TouchableOpacity } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, interpolate, runOnJS, useAnimatedGestureHandler } from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, interpolate, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomText from '../CustomText';
@@ -76,12 +76,12 @@ export default function ContextualSheet({ visible, onClose, origin, children }: 
     zIndex: 1000,
   }));
 
-  // Pan gesture for swipe-to-dismiss (Reanimated v2+)
-  const gestureHandler = useAnimatedGestureHandler({
-    onActive: (event) => {
+  // Pan gesture for swipe-to-dismiss (Reanimated v3+ / Gesture API)
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
       translateY.value = event.translationY;
-    },
-    onEnd: (event) => {
+    })
+    .onEnd((event) => {
       if (event.translationY > 120) {
         progress.value = withTiming(0, { duration: 220 }, (finished) => {
           if (finished && onClose) runOnJS(onClose)();
@@ -89,8 +89,7 @@ export default function ContextualSheet({ visible, onClose, origin, children }: 
       } else {
         translateY.value = withSpring(0);
       }
-    },
-  });
+    });
 
   const animatedContentStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -109,7 +108,7 @@ export default function ContextualSheet({ visible, onClose, origin, children }: 
   return (
     <>
       <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={animatedBgStyle} />
-      <PanGestureHandler onGestureEvent={gestureHandler}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View style={[animatedSheetStyle, animatedContentStyle]}>
           <View
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flex: 1, backgroundColor: '#F8F8FC' }}
@@ -117,7 +116,7 @@ export default function ContextualSheet({ visible, onClose, origin, children }: 
             <View style={{ flex: 1 }}>{children}</View>
           </View>
         </Animated.View>
-      </PanGestureHandler>
+      </GestureDetector>
     </>
   );
 }

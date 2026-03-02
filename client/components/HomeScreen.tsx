@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TextInput, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Keyboard, TouchableWithoutFeedback, Platform, Easing, Dimensions, FlatList } from 'react-native';
+import { View, TextInput, StyleSheet, Image, ScrollView, TouchableOpacity, Animated, Keyboard, TouchableWithoutFeedback, Platform, Easing, Dimensions, FlatList, KeyboardAvoidingView } from 'react-native';
 import CustomText from './CustomText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -512,6 +512,12 @@ export default function HomeScreen() {
   }, [showRecentlyCooked]);
 
   function closeDropdown() {
+    setSearchTouched(false);
+    setSearchFocused(false);
+    Keyboard.dismiss();
+  }
+
+  function clearSearch() {
     setSearch('');
     setSearchTouched(false);
     setSearchFocused(false);
@@ -563,9 +569,13 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
 
-        {/* Main Content */}
-        <View style={[styles.contentWrapper, { zIndex: 1 }]}>
-          {/* Enhanced Search Bar */}
+        {/* Main Content - KeyboardAvoidingView so list resizes when keyboard opens, allowing scroll to see all results */}
+        <KeyboardAvoidingView
+          style={[styles.contentWrapper, { zIndex: 1, flex: 1 }]}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Search bar - capture touches so TouchableWithoutFeedback doesn't clear search when tapping input */}
+          <View onStartShouldSetResponder={() => true}>
           <Animated.View 
             style={[
               styles.searchBarWrapper,
@@ -598,7 +608,7 @@ export default function HomeScreen() {
               />
               {search.length > 0 && (
                 <TouchableOpacity 
-                  onPress={closeDropdown}
+                  onPress={clearSearch}
                   style={styles.searchClear}
                   activeOpacity={0.7}
                 >
@@ -607,6 +617,7 @@ export default function HomeScreen() {
               )}
             </View>
           </Animated.View>
+          </View>
 
           <ScrollView 
             style={styles.scrollView} 
@@ -614,6 +625,8 @@ export default function HomeScreen() {
             showsVerticalScrollIndicator={false}
             bounces={true}
             scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {/* Search Results */}
             {searchTouched && search.length > 0 && (
@@ -810,7 +823,7 @@ export default function HomeScreen() {
               </>
             )}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
 
         {/* Modals */}
         {(showRecentlyCooked && recentlyCookedOrigin && recentlyCookedOrigin.width > 0) && (

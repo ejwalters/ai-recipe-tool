@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, FlatList } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
@@ -83,8 +83,8 @@ export default function AddRecipeManualScreen() {
     const isEditMode = params.editMode === 'true';
     const recipeId = params.recipeId as string;
     
-    // Ref to track if we've already initialized
     const initializedRef = useRef(false);
+    const scrollViewRef = useRef<ScrollView>(null);
     
     // Initialize state with empty values first
     const [title, setTitle] = useState('');
@@ -320,6 +320,11 @@ export default function AddRecipeManualScreen() {
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
             
+            <KeyboardAvoidingView 
+                style={{ flex: 1 }} 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={0}
+            >
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <View style={styles.headerRow}>
@@ -333,9 +338,12 @@ export default function AddRecipeManualScreen() {
 
             {/* Content */}
             <ScrollView 
+                ref={scrollViewRef}
                 style={styles.scrollView} 
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
             >
                 {/* Recipe Details Section */}
                 <View style={styles.card}>
@@ -527,6 +535,7 @@ export default function AddRecipeManualScreen() {
                                         value={ing}
                                         onChangeText={val => updateIngredient(idx, val)}
                                         blurOnSubmit={false}
+                                        onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
                                     />
                                     {ingredients.length > 1 && (
                                         <TouchableOpacity 
@@ -578,6 +587,7 @@ export default function AddRecipeManualScreen() {
                                         onChangeText={val => updateStep(idx, val)}
                                         multiline
                                         blurOnSubmit={false}
+                                        onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300)}
                                     />
                                     {steps.length > 1 && (
                                         <TouchableOpacity 
@@ -613,6 +623,7 @@ export default function AddRecipeManualScreen() {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
