@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import CustomText from '../components/CustomText';
 import * as ImagePicker from 'expo-image-picker';
 
+const MAX_IMAGES = 10;
+
 export default function AddRecipePhotoScreen() {
     const router = useRouter();
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [selectedImages, setSelectedImages] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
 
     const requestPermissions = async () => {
@@ -34,13 +36,17 @@ export default function AddRecipePhotoScreen() {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
+            allowsMultipleSelection: true,
+            selectionLimit: MAX_IMAGES,
             quality: 0.8,
         });
 
-        if (!result.canceled && result.assets[0]) {
-            setSelectedImage(result.assets[0].uri);
+        if (!result.canceled && result.assets.length > 0) {
+            const newUris = result.assets.map((a) => a.uri);
+            setSelectedImages((prev) => {
+                const combined = [...prev, ...newUris].slice(0, MAX_IMAGES);
+                return combined;
+            });
         }
     };
 
@@ -49,44 +55,63 @@ export default function AddRecipePhotoScreen() {
         if (!hasPermission) return;
 
         const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [4, 3],
+            allowsEditing: false,
             quality: 0.8,
         });
 
         if (!result.canceled && result.assets[0]) {
-            setSelectedImage(result.assets[0].uri);
+            setSelectedImages((prev) => {
+                const next = [...prev, result.assets[0].uri];
+                return next.length <= MAX_IMAGES ? next : next.slice(0, MAX_IMAGES);
+            });
         }
     };
 
-    const processImageWithAI = async () => {
-        if (!selectedImage) return;
+    const removeImage = (index: number) => {
+        setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const processImagesWithAI = async () => {
+        if (selectedImages.length === 0) return;
 
         setProcessing(true);
         try {
-            // Create form data for image upload
             const formData = new FormData();
-            formData.append('image', {
-                uri: selectedImage,
-                type: 'image/jpeg',
-                name: 'recipe.jpg',
-            } as any);
+            selectedImages.forEach((uri, i) => {
+                formData.append('images', {
+                    uri,
+                    type: 'image/jpeg',
+                    name: `recipe-${i}.jpg`,
+                } as any);
+            });
 
-            // Call AI endpoint to extract recipe details
             const response = await fetch('https://familycooksclean.onrender.com/ai/extract-recipe', {
                 method: 'POST',
                 body: formData,
-                // Don't set Content-Type header - let the browser set it with boundary
             });
 
+            const responseText = await response.text();
+
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to process image');
+                let errorMessage = 'Failed to process image';
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    if (responseText.startsWith('<') || response.status >= 502) {
+                        errorMessage = 'The recipe service is temporarily unavailable. Please try again in a moment.';
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
-            const recipeData = await response.json();
-            
-            // Navigate to manual form with extracted data
+            let recipeData: any;
+            try {
+                recipeData = JSON.parse(responseText);
+            } catch {
+                throw new Error('The server returned an unexpected response. Please try again.');
+            }
+
             router.push({
                 pathname: '/add-recipe-manual',
                 params: {
@@ -96,17 +121,16 @@ export default function AddRecipePhotoScreen() {
                     extractedTime: recipeData.cookTime || '',
                     extractedServings: recipeData.servings || '',
                     extractedTags: JSON.stringify(recipeData.tags || []),
-                }
+                },
             });
-
         } catch (error: any) {
             console.error('Error processing image:', error);
             Alert.alert(
-                'Processing Error', 
+                'Processing Error',
                 error.message || 'Failed to extract recipe details. Please try again or add the recipe manually.',
                 [
                     { text: 'Try Again', onPress: () => setProcessing(false) },
-                    { text: 'Add Manually', onPress: () => router.push('/add-recipe-manual') }
+                    { text: 'Add Manually', onPress: () => router.push('/add-recipe-manual') },
                 ]
             );
         } finally {
@@ -114,11 +138,13 @@ export default function AddRecipePhotoScreen() {
         }
     };
 
+    const hasImages = selectedImages.length > 0;
+    const canAddMore = selectedImages.length < MAX_IMAGES;
+
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-            
-            {/* Header */}
+
             <View style={styles.header}>
                 <View style={styles.headerContent}>
                     <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -128,12 +154,15 @@ export default function AddRecipePhotoScreen() {
                     <View style={{ flex: 1 }} />
                 </View>
                 <CustomText style={styles.headerText}>Add Recipe from Photo</CustomText>
-                <CustomText style={styles.subHeader}>Take or select a photo of your recipe</CustomText>
+                <CustomText style={styles.subHeader}>
+                    {hasImages
+                        ? `${selectedImages.length} image${selectedImages.length === 1 ? '' : 's'} selected (e.g. front & back of card)`
+                        : 'Take or select photos of your recipe'}
+                </CustomText>
             </View>
 
-            {/* Content */}
             <View style={styles.content}>
-                {!selectedImage ? (
+                {!hasImages ? (
                     <View style={styles.selectionContainer}>
                         <View style={styles.optionCard}>
                             <TouchableOpacity style={styles.photoOption} onPress={takePhoto} activeOpacity={0.92}>
@@ -141,7 +170,9 @@ export default function AddRecipePhotoScreen() {
                                     <Ionicons name="camera" size={32} color="#6DA98C" />
                                 </View>
                                 <CustomText style={styles.optionTitle}>Take Photo</CustomText>
-                                <CustomText style={styles.optionDescription}>Use your camera to capture the recipe</CustomText>
+                                <CustomText style={styles.optionDescription}>
+                                    Capture the recipe (you can add more after)
+                                </CustomText>
                             </TouchableOpacity>
                         </View>
 
@@ -151,28 +182,60 @@ export default function AddRecipePhotoScreen() {
                                     <Ionicons name="images" size={32} color="#6DA98C" />
                                 </View>
                                 <CustomText style={styles.optionTitle}>Choose from Gallery</CustomText>
-                                <CustomText style={styles.optionDescription}>Select an existing photo of your recipe</CustomText>
+                                <CustomText style={styles.optionDescription}>
+                                    Select one or multiple photos (e.g. front and back)
+                                </CustomText>
                             </TouchableOpacity>
                         </View>
 
                         <View style={styles.tipsSection}>
                             <CustomText style={styles.tipsTitle}>📸 Tips for best results:</CustomText>
                             <CustomText style={styles.tipsText}>
-                            • Ensure good lighting{'\n'}
-                            • Keep the recipe text clear and readable{'\n'}
-                            • Avoid shadows or glare{'\n'}
-                            • Make sure all text is visible in the frame
+                                • Use multiple images for front and back of a recipe card{'\n'}
+                                • Ensure good lighting{'\n'}
+                                • Keep the recipe text clear and readable{'\n'}
+                                • Avoid shadows or glare
                             </CustomText>
                         </View>
                     </View>
                 ) : (
-                    <View style={styles.previewContainer}>
-                        <Image source={{ uri: selectedImage }} style={styles.previewImage} />
-                        
+                    <ScrollView style={styles.scrollView} contentContainerStyle={styles.previewScrollContent} showsVerticalScrollIndicator={false}>
+                        <View style={styles.thumbnailGrid}>
+                            {selectedImages.map((uri, index) => (
+                                <View key={`${uri}-${index}`} style={styles.thumbnailWrapper}>
+                                    <Image source={{ uri }} style={styles.thumbnail} />
+                                    <TouchableOpacity
+                                        style={styles.removeThumbnail}
+                                        onPress={() => removeImage(index)}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Ionicons name="close-circle" size={28} color="#EF4444" />
+                                    </TouchableOpacity>
+                                    {selectedImages.length > 1 && (
+                                        <View style={styles.thumbnailLabel}>
+                                            <CustomText style={styles.thumbnailLabelText}>{index + 1}</CustomText>
+                                        </View>
+                                    )}
+                                </View>
+                            ))}
+                            {canAddMore && (
+                                <View style={styles.addMoreRow}>
+                                    <TouchableOpacity style={styles.addMoreCard} onPress={takePhoto} activeOpacity={0.92}>
+                                        <Ionicons name="camera" size={28} color="#6DA98C" />
+                                        <CustomText style={styles.addMoreText}>Add photo</CustomText>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.addMoreCard} onPress={selectFromGallery} activeOpacity={0.92}>
+                                        <Ionicons name="images" size={28} color="#6DA98C" />
+                                        <CustomText style={styles.addMoreText}>Add from gallery</CustomText>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+
                         <View style={styles.actionButtons}>
-                            <TouchableOpacity 
-                                style={styles.processButton} 
-                                onPress={processImageWithAI}
+                            <TouchableOpacity
+                                style={styles.processButton}
+                                onPress={processImagesWithAI}
                                 disabled={processing}
                                 activeOpacity={0.92}
                             >
@@ -186,16 +249,16 @@ export default function AddRecipePhotoScreen() {
                                 )}
                             </TouchableOpacity>
 
-                            <TouchableOpacity 
-                                style={styles.retakeButton} 
-                                onPress={() => setSelectedImage(null)}
+                            <TouchableOpacity
+                                style={styles.retakeButton}
+                                onPress={() => setSelectedImages([])}
                                 activeOpacity={0.92}
                             >
                                 <Ionicons name="refresh" size={20} color="#6DA98C" />
-                                <CustomText style={styles.retakeButtonText}>Take Different Photo</CustomText>
+                                <CustomText style={styles.retakeButtonText}>Start over</CustomText>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </ScrollView>
                 )}
             </View>
         </View>
@@ -311,15 +374,74 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         lineHeight: 20,
     },
-    previewContainer: {
+    scrollView: {
         flex: 1,
+    },
+    previewScrollContent: {
+        paddingBottom: 32,
+    },
+    thumbnailGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 24,
+    },
+    thumbnailWrapper: {
+        width: '47%',
+        aspectRatio: 1,
+        borderRadius: 12,
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: '#E5E7EB',
+    },
+    thumbnail: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    removeThumbnail: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 14,
+    },
+    thumbnailLabel: {
+        position: 'absolute',
+        bottom: 6,
+        left: 6,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    thumbnailLabelText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    addMoreRow: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    addMoreCard: {
+        flex: 1,
+        aspectRatio: 1,
+        maxHeight: 100,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderColor: '#6DA98C',
+        backgroundColor: '#F0F9FF',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    previewImage: {
-        width: '100%',
-        height: 300,
-        borderRadius: 16,
-        marginBottom: 24,
+    addMoreText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6DA98C',
+        marginTop: 6,
     },
     actionButtons: {
         width: '100%',
@@ -360,4 +482,4 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginLeft: 8,
     },
-}); 
+});

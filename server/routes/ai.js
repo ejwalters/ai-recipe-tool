@@ -392,27 +392,18 @@ Example:
     }
 });
 
-// POST /ai/extract-recipe
-router.post('/extract-recipe', upload.single('image'), async (req, res) => {
+// POST /ai/extract-recipe (accepts single image or multiple images, e.g. front/back of recipe card)
+router.post('/extract-recipe', upload.array('images', 10), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No image file provided' });
+        const files = req.files && req.files.length ? req.files : (req.file ? [req.file] : []);
+        if (!files.length) {
+            return res.status(400).json({ error: 'No image file(s) provided' });
         }
 
-        // Convert the image buffer to base64
-        const base64Image = req.file.buffer.toString('base64');
-        const mimeType = req.file.mimetype;
-
-        // Call OpenAI Vision API to extract recipe details
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: `Extract recipe details from this image. Return ONLY a JSON object with the following structure:
+        const content = [
+            {
+                type: "text",
+                text: `Extract recipe details from ${files.length === 1 ? 'this image' : 'these images (e.g. front and back of a recipe card)'}. Combine all visible text into a single recipe. Return ONLY a JSON object with the following structure:
 {
   "title": "Recipe name",
   "cookTime": "Estimated cooking time (e.g., '30 min')",
@@ -422,24 +413,29 @@ router.post('/extract-recipe', upload.single('image'), async (req, res) => {
   "tags": ["tag1", "tag2", ...]
 }
 
-If you cannot extract a recipe from the image, return:
+If you cannot extract a recipe from the image(s), return:
 {
   "error": "No recipe found in image"
 }
 
-IMPORTANT: If any field cannot be determined from the image, use an empty string ("") instead of "Not specified" or similar text. This allows the form to show placeholder text.
+IMPORTANT: If any field cannot be determined from the image(s), use an empty string ("") instead of "Not specified" or similar text. This allows the form to show placeholder text.
 
 Be as accurate as possible with the extraction. For ingredients and steps, split them into individual array items.`
-                        },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:${mimeType};base64,${base64Image}`
-                            }
-                        }
-                    ]
-                }
-            ],
+            }
+        ];
+
+        for (const file of files) {
+            const base64Image = file.buffer.toString('base64');
+            const mimeType = file.mimetype;
+            content.push({
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${base64Image}` }
+            });
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [{ role: "user", content }],
             max_tokens: 1000,
         });
 

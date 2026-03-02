@@ -53,6 +53,14 @@ export default {
             backgroundColor: "#ffffff",
           },
         ],
+        [
+          "expo-image-picker",
+          {
+            photosPermission: "Allow AI Recipe Tool to access your photos to select recipe images.",
+            cameraPermission: "Allow AI Recipe Tool to access your camera to scan recipe cards.",
+            microphonePermission: false,
+          },
+        ],
       ],
   
       experiments: {
