@@ -727,13 +727,13 @@ export default function SocialScreen() {
             {iconConfig.library === 'MaterialCommunityIcons' ? (
               <MaterialCommunityIcons 
                 name={iconConfig.name as any} 
-                size={120} 
+                size={64} 
                 color={iconConfig.iconColor} 
               />
             ) : (
               <Ionicons 
                 name={iconConfig.name as any} 
-                size={120} 
+                size={64} 
                 color={iconConfig.iconColor} 
               />
             )}
@@ -1238,8 +1238,8 @@ const styles = StyleSheet.create({
   feedCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 12,
     shadowColor: 'rgba(0, 0, 0, 0.08)',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1252,7 +1252,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   moreButton: {
     width: 32,
@@ -1283,26 +1283,26 @@ const styles = StyleSheet.create({
   },
   recipeIconDisplay: {
     width: '100%',
-    height: 200,
+    height: 120,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     backgroundColor: '#F3F4F6',
   },
   feedCardTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1F2937',
-    lineHeight: 26,
-    marginBottom: 12,
+    lineHeight: 24,
+    marginBottom: 8,
     letterSpacing: -0.3,
   },
   feedCardMetricsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   feedMetricItem: {
     flexDirection: 'row',
@@ -1319,7 +1319,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   feedTagChip: {
     borderRadius: 16,

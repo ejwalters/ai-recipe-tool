@@ -958,87 +958,88 @@ export default function RecipeDetailV2({ recipes, router: propRouter }: RecipeDe
       <StatusBar barStyle="dark-content" />
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Integrated header - back/favorite above, then icon + title/meta/tags/actions */}
-      <View style={[styles.heroSection, { backgroundColor: iconConfig.backgroundColor, paddingTop: Math.max(insets.top - 30, 0) }]}>
-        {/* Top row: back button left, favorite button right */}
-        <View style={styles.topActions}>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="arrow-back" size={24} color="#1F2937" />
+      {/* Recipe header - modern, clean hierarchy */}
+      <View style={[styles.recipeHeader, { paddingTop: Math.max(insets.top + 8, 20) }]}>
+        {/* Nav bar - minimal */}
+        <View style={styles.headerNav}>
+          <TouchableOpacity style={styles.headerNavBtn} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="arrow-back" size={22} color="#374151" />
           </TouchableOpacity>
           {!isAIRecipe && (
-            <TouchableOpacity style={styles.headerBtn} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              {favorited ? <Ionicons name="heart" size={24} color="#F87171" /> : <Ionicons name="heart-outline" size={24} color="#1F2937" />}
+            <TouchableOpacity style={styles.headerNavBtn} onPress={handleToggleFavorite} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              {favorited ? <Ionicons name="heart" size={22} color="#EF4444" /> : <Ionicons name="heart-outline" size={22} color="#6B7280" />}
             </TouchableOpacity>
           )}
         </View>
-        <View style={styles.heroRow}>
-          <View style={styles.heroIcon}>
-            {iconConfig.library === 'MaterialCommunityIcons' ? (
-              <MaterialCommunityIcons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
-            ) : (
-              <Ionicons name={iconConfig.name as any} size={32} color={iconConfig.iconColor} />
-            )}
+
+        {/* Title - primary focus */}
+        <CustomText style={styles.recipeTitle} numberOfLines={2}>{recipe.title}</CustomText>
+
+        {/* Meta - time & ingredients, one compact line */}
+        <View style={styles.recipeMeta}>
+          <View style={styles.recipeMetaItem}>
+            <Ionicons name="time-outline" size={15} color="#6B7280" />
+            <CustomText style={styles.recipeMetaText}>{recipe.time}</CustomText>
           </View>
-          <View style={styles.heroContent}>
-            <CustomText style={styles.detailTitle} numberOfLines={2}>{recipe.title}</CustomText>
-            <View style={styles.detailMetaRow}>
-              <View style={styles.detailMetaItem}>
-                <Ionicons name="time-outline" size={14} color="#6B7280" />
-                <CustomText style={styles.detailMetaText}>{recipe.time}</CustomText>
-              </View>
-              <View style={styles.detailMetaItem}>
-                <Ionicons name="restaurant-outline" size={14} color="#6B7280" />
-                <CustomText style={styles.detailMetaText}>{ingredients.length} ingredients</CustomText>
-              </View>
-            </View>
-            {recipe?.owner && (
-              <View style={styles.ownerRow}>
-                {recipe.owner.avatar_url ? (
-                  <Image source={{ uri: recipe.owner.avatar_url }} style={styles.ownerAvatar} />
-                ) : (
-                  <Ionicons name="person-circle-outline" size={14} color="rgba(31,41,55,0.7)" />
-                )}
-                <CustomText style={styles.ownerText}>{recipe.owner.display_name}</CustomText>
-              </View>
-            )}
-            {tags.length > 0 && (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                style={styles.detailTags}
-                contentContainerStyle={styles.detailTagsContent}
-              >
-                {tags.map((tag: string, idx: number) => {
-                  const tagStyle = getTagStyle(idx);
-                  return (
-                    <View key={idx} style={[styles.detailTag, { backgroundColor: tagStyle.bg }]}>
-                      <CustomText style={[styles.detailTagText, { color: tagStyle.text }]}>{tag}</CustomText>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
-            <View style={styles.detailActions}>
-              {!isAIRecipe && recipe.user_id === userId && (
-                <TouchableOpacity style={styles.detailEditBtn} onPress={handleEditRecipe} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                  <Ionicons name="create-outline" size={16} color="#256D85" />
-                  <CustomText style={styles.detailEditBtnText}>Edit</CustomText>
-                </TouchableOpacity>
-              )}
-              {isAIRecipe && !saved && (
-                <TouchableOpacity style={styles.detailActionBtnPrimary} onPress={handleSaveRecipe} disabled={saving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Book color="#fff" size={18} />
-                  <CustomText style={styles.detailActionBtnPrimaryText}>Save to collection</CustomText>
-                </TouchableOpacity>
-              )}
-              {isAIRecipe && saved && (
-                <View style={styles.detailActionBtnSaved}>
-                  <BookIcon color="#256D85" size={18} />
-                  <CustomText style={styles.detailActionBtnSavedText}>Saved</CustomText>
+          <View style={styles.recipeMetaDot} />
+          <View style={styles.recipeMetaItem}>
+            <Ionicons name="restaurant-outline" size={15} color="#6B7280" />
+            <CustomText style={styles.recipeMetaText}>{ingredients.length} ingredients</CustomText>
+          </View>
+        </View>
+
+        {/* Author + tags row */}
+        <View style={styles.recipeAttribution}>
+          {recipe?.owner && (
+            <TouchableOpacity
+              style={styles.recipeAuthor}
+              onPress={() => recipe.user_id && router.push({ pathname: '/user-profile', params: { user_id: recipe.user_id } })}
+              activeOpacity={0.7}
+            >
+              {recipe.owner.avatar_url ? (
+                <Image source={{ uri: recipe.owner.avatar_url }} style={styles.ownerAvatarSmall} />
+              ) : (
+                <View style={styles.ownerAvatarPlaceholder}>
+                  <Ionicons name="person" size={12} color="#9CA3AF" />
                 </View>
               )}
+              <CustomText style={styles.recipeAuthorText}>by {recipe.owner.display_name}</CustomText>
+            </TouchableOpacity>
+          )}
+          {tags.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recipeTagsScroll} contentContainerStyle={styles.recipeTagsContent}>
+              {tags.slice(0, 4).map((tag: string, idx: number) => {
+                const tagStyle = getTagStyle(idx);
+                return (
+                  <View key={tag} style={[styles.recipeTag, { backgroundColor: tagStyle.bg }]}>
+                    <CustomText style={[styles.recipeTagText, { color: tagStyle.text }]}>{tag}</CustomText>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Secondary actions */}
+        <View style={styles.recipeHeaderActions}>
+          {!isAIRecipe && recipe.user_id === userId && (
+            <TouchableOpacity style={styles.recipeActionSecondary} onPress={handleEditRecipe} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="create-outline" size={16} color="#256D85" />
+              <CustomText style={styles.recipeActionSecondaryText}>Edit</CustomText>
+            </TouchableOpacity>
+          )}
+          {isAIRecipe && !saved && (
+            <TouchableOpacity style={styles.recipeActionPrimary} onPress={handleSaveRecipe} disabled={saving} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Book color="#fff" size={16} />
+              <CustomText style={styles.recipeActionPrimaryText}>Save to collection</CustomText>
+            </TouchableOpacity>
+          )}
+          {isAIRecipe && saved && (
+            <View style={styles.recipeActionSaved}>
+              <BookIcon color="#256D85" size={16} />
+              <CustomText style={styles.recipeActionSavedText}>Saved</CustomText>
             </View>
-          </View>
+          )}
         </View>
       </View>
 
@@ -1644,65 +1645,158 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F5FB',
   },
-  heroSection: {
-    paddingBottom: 12,
+  recipeHeader: {
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: 'rgba(0,0,0,0.04)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 2,
   },
-  topActions: {
+  headerNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    shadowColor: 'rgba(0,0,0,0.1)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  heroContent: {
-    flex: 1,
-  },
-  ownerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  ownerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  ownerText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(31,41,55,0.8)',
-  },
-  headerBtn: {
+  headerNavBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#F9FAFB',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+  },
+  recipeTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.6,
+    lineHeight: 32,
+    marginBottom: 12,
+  },
+  recipeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 8,
+  },
+  recipeMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recipeMetaText: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  recipeMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+  },
+  recipeAttribution: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  recipeAuthor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ownerAvatarSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  ownerAvatarPlaceholder: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeAuthorText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  recipeTagsScroll: {
+    flexGrow: 0,
+  },
+  recipeTagsContent: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  recipeTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recipeTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  recipeHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recipeActionSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  recipeActionSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#256D85',
+  },
+  recipeActionPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#1B5B6B',
+  },
+  recipeActionPrimaryText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  recipeActionSaved: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  recipeActionSavedText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#256D85',
   },
   floatingBtn: {
     width: 44,
@@ -1716,84 +1810,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
-  },
-  detailTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 4,
-    letterSpacing: -0.5,
-    lineHeight: 26,
-  },
-  detailMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 4,
-  },
-  detailMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  detailMetaText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  detailTags: {
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  detailTagsContent: {
-    paddingRight: 24,
-  },
-  detailTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    marginRight: 8,
-  },
-  detailTagText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  detailActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  detailEditBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  detailEditBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#256D85',
-  },
-  detailActionBtnPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: '#1B5B6B',
-  },
-  detailActionBtnPrimaryText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
   },
   detailActionBtnSaved: {
     flexDirection: 'row',
@@ -1987,14 +2003,14 @@ const styles = StyleSheet.create({
   recipeInfoContent: {
     flex: 1,
   },
-  recipeTitle: {
+  recipeInfoTitle: {
     fontSize: 28,
     fontWeight: '800',
     color: '#1E293B',
     marginBottom: 8,
     lineHeight: 34,
   },
-  recipeMeta: {
+  recipeInfoMeta: {
     flexDirection: 'row',
     marginBottom: 16,
   },
